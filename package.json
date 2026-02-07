@@ -2,7 +2,7 @@
     "name": "caido-vibe-hacking",
     "private": true,
     "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Caido MCP plugin",
     "main": "index.js",
     "scripts": {
@@ -11,7 +11,8 @@
         "build": "pnpm exec caido-dev build .",
         "watch": "pnpm exec caido-dev watch .",
         "format": "prettier --write .",
-        "smoke": "pnpm dlx tsx scripts/mcp-smoke/index.ts"
+        "smoke": "pnpm dlx tsx scripts/mcp-smoke/index.ts",
+        "release:tag": "node -p \"require('./package.json').version\" | xargs -I{} sh -c 'git tag v{} && git push origin v{}'"
     },
     "keywords": [
         "MCP",
