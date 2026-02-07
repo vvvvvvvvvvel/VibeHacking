@@ -1,0 +1,34 @@
+{
+    "name": "caido-vibe-hacking",
+    "private": true,
+    "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264",
+    "version": "0.1.0",
+    "description": "Caido MCP plugin",
+    "main": "index.js",
+    "scripts": {
+        "sync:version": "node scripts/sync-version.mjs",
+        "prebuild": "node scripts/sync-version.mjs",
+        "build": "pnpm exec caido-dev build .",
+        "watch": "pnpm exec caido-dev watch .",
+        "format": "prettier --write .",
+        "smoke": "pnpm dlx tsx scripts/mcp-smoke/index.ts"
+    },
+    "keywords": [
+        "MCP",
+        "caido"
+    ],
+    "author": "vvvvvvvvvvel",
+    "license": "MIT",
+    "devDependencies": {
+        "@caido-community/dev": "^0.1.6",
+        "@caido/eslint-config": "^0.8.0",
+        "@vitejs/plugin-vue": "^6.0.4",
+        "@types/node": "^20.19.11",
+        "autoprefixer": "^10.4.24",
+        "eslint": "^9.39.2",
+        "postcss": "^8.5.6",
+        "postcss-prefixwrap": "^1.57.2",
+        "prettier": "^3.8.1",
+        "typescript": "^5.8.4"
+    }
+}

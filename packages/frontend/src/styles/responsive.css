@@ -1,0 +1,32 @@
+@media (max-width: 720px) {
+    .mcp-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .mcp-panel-head {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .mcp-about {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .tool-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .tool-controls {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .tool-dropdown__menu {
+        left: 0;
+        right: auto;
+    }
+}

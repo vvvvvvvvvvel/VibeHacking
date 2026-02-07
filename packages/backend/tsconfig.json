@@ -1,0 +1,7 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "types": ["@caido/sdk-backend", "@caido/quickjs-types", "node"]
+    },
+    "include": ["./src/**/*.ts"]
+}

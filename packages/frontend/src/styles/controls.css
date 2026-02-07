@@ -1,0 +1,185 @@
+/* Inputs */
+.edit-input {
+    width: 100%;
+    background: rgba(2, 6, 23, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: #e2e8f0;
+    border-radius: var(--mcp-radius-sm);
+    padding: var(--mcp-space-1) var(--mcp-space-2);
+    font-size: var(--mcp-text-md);
+    font-family: var(--mcp-font-mono, ui-monospace), monospace;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.edit-input[type="number"]::-webkit-outer-spin-button,
+.edit-input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.edit-input[type="number"] {
+    appearance: textfield;
+}
+
+.edit-input:disabled {
+    opacity: 0.6;
+}
+
+.edit-input:focus-visible {
+    outline: none;
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+/* Buttons */
+.icon-btn {
+    background: rgba(148, 163, 184, 0.15);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    color: #cbd5f5;
+    border-radius: 999px;
+    padding: 4px var(--mcp-space-2);
+    font-size: var(--mcp-text-xs);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+        border-color 0.2s ease,
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.icon-btn:not(.icon-only) {
+    min-height: 28px;
+}
+
+.icon-btn.icon-only {
+    width: var(--mcp-icon-btn-size);
+    height: var(--mcp-icon-btn-size);
+    padding: 0;
+    font-size: 1.1em;
+    line-height: 1;
+}
+
+.icon-btn svg {
+    width: var(--mcp-icon-btn-icon);
+    height: var(--mcp-icon-btn-icon);
+}
+
+.icon-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.icon-btn:not(:disabled):hover {
+    background: rgba(148, 163, 184, 0.25);
+    border-color: rgba(148, 163, 184, 0.45);
+}
+
+.apply-btn {
+    background: linear-gradient(135deg, #22c55e, #0ea5e9);
+    border: none;
+    color: #0b1220;
+    border-radius: var(--mcp-radius-sm);
+    padding: var(--mcp-space-1) var(--mcp-space-3);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.2s ease;
+}
+
+.apply-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.apply-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35);
+}
+
+.test-btn {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+    border-radius: var(--mcp-radius-sm);
+    padding: var(--mcp-space-1) var(--mcp-space-3);
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+        transform 0.15s ease,
+        box-shadow 0.2s ease;
+}
+
+.test-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.test-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.35);
+}
+
+/* Switch */
+.simple-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.simple-switch input {
+    position: absolute;
+    inset: 0;
+    width: var(--mcp-switch-width);
+    height: var(--mcp-switch-height);
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.simple-switch .track {
+    width: var(--mcp-switch-width);
+    height: var(--mcp-switch-height);
+    border-radius: 999px;
+    background: rgba(51, 65, 85, 0.9);
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    position: relative;
+    transition:
+        background 0.2s ease,
+        border 0.2s ease;
+}
+
+.simple-switch .thumb {
+    position: absolute;
+    top: var(--mcp-switch-gap);
+    left: var(--mcp-switch-gap);
+    width: var(--mcp-switch-thumb);
+    height: var(--mcp-switch-thumb);
+    border-radius: 50%;
+    background: #e2e8f0;
+    transition:
+        transform 0.2s ease,
+        background 0.2s ease;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.5);
+}
+
+.simple-switch input:checked + .track {
+    background: linear-gradient(135deg, #22c55e, #0ea5e9);
+    border-color: rgba(14, 165, 233, 0.7);
+}
+
+.simple-switch input:checked + .track .thumb {
+    background: #0b1220;
+    transform: translateX(
+        calc(var(--mcp-switch-width) - var(--mcp-switch-thumb) - (var(--mcp-switch-gap) * 2))
+    );
+}
+
+.simple-switch input:focus-visible + .track {
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3);
+    border-color: rgba(56, 189, 248, 0.6);
+}

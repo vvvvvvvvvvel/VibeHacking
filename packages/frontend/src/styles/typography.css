@@ -1,0 +1,79 @@
+/* Headings */
+.mcp-panel-head h2 {
+    margin: 0 0 var(--mcp-space-1);
+    font-size: var(--mcp-text-xl);
+}
+
+.mcp-panel-head p {
+    margin: 0;
+    color: var(--mcp-color-hint);
+    font-size: var(--mcp-text-md);
+}
+
+.mcp-about h3 {
+    margin: 0 0 var(--mcp-space-1);
+    font-size: var(--mcp-text-md);
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.mcp-about p {
+    margin: 0;
+    font-size: var(--mcp-text-md);
+}
+
+.mcp-title h1 {
+    margin: 0;
+    font-size: var(--mcp-text-2xl);
+    font-weight: 700;
+    color: #f3f4f6;
+}
+
+.mcp-kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    font-size: var(--mcp-text-xs);
+    color: #9aa6b2;
+    margin: 0 0 var(--mcp-space-2);
+}
+
+.mcp-sub {
+    margin: var(--mcp-space-1) 0 0;
+    color: #c7d0db;
+    max-width: 560px;
+}
+
+/* Labels */
+.label {
+    font-size: var(--mcp-text-xs);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--mcp-color-label);
+    margin-bottom: var(--mcp-space-1);
+}
+
+.value {
+    font-size: var(--mcp-text-lg);
+    font-weight: 600;
+    color: #f1f5f9;
+    line-height: 1.35;
+}
+
+.mono {
+    font-family: var(--mcp-font-mono, ui-monospace), monospace;
+    font-size: var(--mcp-text-md);
+}
+
+.hint {
+    margin-top: var(--mcp-space-1);
+    font-size: var(--mcp-text-sm);
+    color: var(--mcp-color-hint);
+    line-height: 1.2;
+    max-width: 100%;
+}
+
+.meta {
+    text-align: right;
+    font-size: var(--mcp-text-sm);
+}
