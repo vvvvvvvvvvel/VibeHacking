@@ -16,7 +16,7 @@ export default defineConfig({
     description: "Caido MCP plugin",
     author: {
         name: "vvvvvvvvvvel",
-        email: undefined,
+        email: "vvvvvvvvvvel@proton.me",
         url: "https://github.com/vvvvvvvvvvel",
     },
     plugins: [
