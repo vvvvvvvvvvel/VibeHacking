@@ -22,7 +22,7 @@ export type BackendAPI = {
 };
 
 export type BackendEvents = {
-    "caido-mcp:confirm-action": (action: string, details: string, id: number) => void;
+    "vibe-hacking:confirm-action": (action: string, details: string, id: number) => void;
 };
 
 export type ToolGroupMode = "auto" | "confirm" | "disabled";

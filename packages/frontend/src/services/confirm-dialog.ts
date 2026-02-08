@@ -5,7 +5,7 @@ let stopConfirmEvent: (() => void) | undefined;
 
 export const registerConfirmDialog = (sdk: FrontendSDK) => {
     if (stopConfirmEvent !== undefined) return;
-    const subscription = sdk.backend.onEvent("caido-mcp:confirm-action", (action, details, id) => {
+    const subscription = sdk.backend.onEvent("vibe-hacking:confirm-action", (action, details, id) => {
         showQDialog(sdk, {
             title: "Confirm action",
             kicker: "MCP",

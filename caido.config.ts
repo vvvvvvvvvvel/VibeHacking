@@ -7,10 +7,10 @@ import prefixwrap from "postcss-prefixwrap";
 
 import { MCP_PLUGIN_VERSION } from "./packages/shared";
 
-const id = "caido-mcp";
+const id = "vibe-hacking";
 // noinspection JSUnusedGlobalSymbols
 export default defineConfig({
-    id: "caido-mcp",
+    id: id,
     name: "Vibe Hacking",
     version: MCP_PLUGIN_VERSION,
     description: "Caido MCP plugin",

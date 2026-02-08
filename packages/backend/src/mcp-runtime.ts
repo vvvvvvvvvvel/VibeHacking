@@ -55,7 +55,7 @@ export class McpRuntime {
         if (!this.server) {
             this.server = new McpServer(
                 {
-                    name: "caido-mcp-server",
+                    name: "vibe-hacking-server",
                     version: MCP_PLUGIN_VERSION,
                 },
                 {
@@ -106,7 +106,7 @@ export class McpRuntime {
     private createRequestServer() {
         const server = new McpServer(
             {
-                name: "caido-mcp-server",
+                name: "vibe-hacking-server",
                 version: MCP_PLUGIN_VERSION,
             },
             {

@@ -38,7 +38,7 @@ const executeAction = async (
                 return { content: [{ type: "text", text: "ok" }] } as ToolResult;
             },
         );
-        sdk.api.send("caido-mcp:confirm-action", payload.action, formatDetails(payload), id);
+        sdk.api.send("vibe-hacking:confirm-action", payload.action, formatDetails(payload), id);
         const result = await promise;
         if (!result.confirmed) {
             return {
