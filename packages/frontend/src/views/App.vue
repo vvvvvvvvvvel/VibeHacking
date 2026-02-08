@@ -124,9 +124,6 @@
                     >
                         Apply
                     </button>
-                    <button class="test-btn" type="button" :disabled="busy" @click="runTest">
-                        Test
-                    </button>
                 </div>
             </section>
 
@@ -399,16 +396,6 @@ const applyConfig = async () => {
         });
     } finally {
         busy.value = false;
-    }
-};
-
-const runTest = async () => {
-    try {
-        await sdk.backend.testLog();
-    } catch (err) {
-        sdk.window.showToast(`Test failed.\n${err}`, {
-            variant: "error",
-        });
     }
 };
 
