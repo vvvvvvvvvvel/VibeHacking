@@ -1,21 +1,21 @@
 {
-    "name": "frontend",
-    "version": "0.1.0",
-    "description": "MCP frontend",
-    "type": "module",
-    "scripts": {
-        "typecheck": "vue-tsc --noEmit"
-    },
-    "keywords": [],
-    "author": "vvvvvvvvvvel",
-    "license": "MIT",
-    "dependencies": {
-        "vue": "^3.5.27"
-    },
-    "devDependencies": {
-        "@caido/sdk-frontend": "^0.55.3",
-        "@vue/tsconfig": "^0.8.1",
-        "shared": "workspace:*",
-        "vue-tsc": "^3.2.4"
-    }
+  "name": "frontend",
+  "version": "0.1.6",
+  "description": "MCP frontend",
+  "type": "module",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "vvvvvvvvvvel",
+  "license": "MIT",
+  "dependencies": {
+    "vue": "^3.5.27"
+  },
+  "devDependencies": {
+    "@caido/sdk-frontend": "^0.55.3",
+    "@vue/tsconfig": "^0.8.1",
+    "shared": "workspace:*",
+    "vue-tsc": "^3.2.4"
+  }
 }

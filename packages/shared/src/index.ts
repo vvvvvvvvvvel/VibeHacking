@@ -46,4 +46,4 @@ export type ToolPermissions = {
 export const MCP_DEFAULT_HOST = "127.0.0.1";
 export const MCP_DEFAULT_PORT = 3333;
 export const MCP_ENDPOINT_PATH = "/mcp";
-export const MCP_PLUGIN_VERSION = "0.1.0";
+export const MCP_PLUGIN_VERSION = "0.1.6";
