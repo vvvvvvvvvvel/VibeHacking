@@ -1,14 +1,14 @@
 {
-    "name": "shared",
-    "version": "0.1.0",
-    "description": "MCP shared",
-    "type": "module",
-    "types": "src/index.ts",
-    "main": "src/index.ts",
-    "scripts": {
-        "typecheck": "tsc --noEmit"
-    },
-    "keywords": [],
-    "author": "vvvvvvvvvvel",
-    "license": "MIT"
+  "name": "shared",
+  "version": "0.1.6",
+  "description": "MCP shared",
+  "type": "module",
+  "types": "src/index.ts",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "vvvvvvvvvvel",
+  "license": "MIT"
 }

@@ -1,22 +1,22 @@
 {
-    "name": "backend",
-    "version": "0.1.0",
-    "description": "MCP backend",
-    "type": "module",
-    "types": "src/index.ts",
-    "scripts": {
-        "typecheck": "tsc --noEmit"
-    },
-    "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.26.0",
-        "shared": "workspace:*",
-        "zod": "^4.3.6"
-    },
-    "devDependencies": {
-        "@caido/quickjs-types": "^0.25.4",
-        "@caido/sdk-backend": "^0.55.3"
-    },
-    "keywords": [],
-    "author": "vvvvvvvvvvel",
-    "license": "MIT"
+  "name": "backend",
+  "version": "0.1.6",
+  "description": "MCP backend",
+  "type": "module",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "shared": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@caido/quickjs-types": "^0.25.4",
+    "@caido/sdk-backend": "^0.55.3"
+  },
+  "keywords": [],
+  "author": "vvvvvvvvvvel",
+  "license": "MIT"
 }
