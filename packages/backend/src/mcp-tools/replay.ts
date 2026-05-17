@@ -523,7 +523,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.listCollectionsGql",
         group: ToolGroupId.ReplaySafe,
         toolName: "query_replay_collections",
-        description: 'List Replay collections with cursor pagination. Example: { "first": 20 }.',
+        description: "List Replay collections with cursor pagination.",
         inputSchema: paginationSchema,
         handler: async (params) => {
             const response = await sdk.graphql.execute<ReplayCollectionsResponse>(
@@ -673,7 +673,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.listSessions",
         group: ToolGroupId.ReplaySafe,
         toolName: "query_replay_sessions",
-        description: 'List Replay sessions with cursor pagination. Example: { "first": 20 }.',
+        description: "List Replay sessions with cursor pagination.",
         inputSchema: paginationSchema,
         handler: async (params) => {
             const response = await sdk.graphql.execute<ReplaySessionsResponse>(
@@ -690,7 +690,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.getSession",
         group: ToolGroupId.ReplaySafe,
         toolName: "get_replay_session",
-        description: 'Get Replay sessions by ID. Example: { "session_ids": [1] }.',
+        description: "Get Replay sessions by ID.",
         inputSchema: replayGetSessionSchema,
         handler: async (params) => {
             const { session_ids } = replayGetSessionSchema.parse(params);
@@ -894,7 +894,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.createCollection",
         group: ToolGroupId.ReplaySafe,
         toolName: "create_replay_collection",
-        description: 'Create Replay collections. Example: { "names": ["New Collection"] }.',
+        description: "Create Replay collections.",
         inputSchema: replayCreateCollectionSchema,
         handler: async (params) => {
             const { names } = replayCreateCollectionSchema.parse(params);
@@ -919,9 +919,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.moveSession",
         group: ToolGroupId.ReplaySafe,
         toolName: "move_replay_session",
-        description:
-            "Move Replay sessions to a collection. " +
-            'Example: { "items": [{ "ids": [1, 2], "collection_id": 1 }] }.',
+        description: "Move Replay sessions to a collection.",
         inputSchema: moveReplaySessionSchema,
         handler: async (params) => {
             const { items } = moveReplaySessionSchema.parse(params);
@@ -1000,9 +998,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.renameCollection",
         group: ToolGroupId.ReplaySafe,
         toolName: "rename_replay_collection",
-        description:
-            "Rename Replay collections. " +
-            'Example: { "items": [{ "id": 1, "name": "Default" }] }.',
+        description: "Rename Replay collections.",
         inputSchema: replayRenameCollectionSchema,
         handler: async (params) => {
             const { items } = replayRenameCollectionSchema.parse(params);
@@ -1027,8 +1023,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.renameSession",
         group: ToolGroupId.ReplaySafe,
         toolName: "rename_replay_session",
-        description:
-            "Rename Replay sessions. " + 'Example: { "items": [{ "id": 1, "name": "Login" }] }.',
+        description: "Rename Replay sessions.",
         inputSchema: replayRenameSessionSchema,
         handler: async (params) => {
             const { items } = replayRenameSessionSchema.parse(params);
@@ -1053,7 +1048,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.deleteCollection",
         group: ToolGroupId.ReplayUnsafe,
         toolName: "delete_replay_collection",
-        description: 'Delete Replay collections by ID. Example: { "items": [1, 2] }.',
+        description: "Delete Replay collections by ID.",
         inputSchema: replayDeleteCollectionSchema,
         handler: async (params) => {
             const parsed = replayDeleteCollectionSchema.parse(params);
@@ -1075,7 +1070,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.replay.deleteSessions",
         group: ToolGroupId.ReplayUnsafe,
         toolName: "delete_replay_session",
-        description: 'Delete Replay sessions by ID. Example: { "ids": [1] }.',
+        description: "Delete Replay sessions by ID.",
         inputSchema: replayDeleteSessionsSchema,
         handler: async (params) => {
             const { ids } = replayDeleteSessionsSchema.parse(params);

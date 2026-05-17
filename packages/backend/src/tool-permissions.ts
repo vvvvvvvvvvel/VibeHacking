@@ -21,6 +21,7 @@ export enum ToolGroupId {
     RequestSafe = "request-safe",
     RequestUnsafe = "request-unsafe",
     RuntimeSafe = "runtime-safe",
+    SitemapSafe = "sitemap-safe",
     ScopeSafe = "scope-safe",
     ScopeUnsafe = "scope-unsafe",
     TamperSafe = "tamper-safe",
@@ -57,6 +58,7 @@ const BASE_GROUPS: ToolGroupSeed[] = [
     { id: ToolGroupId.RequestSafe, label: "Request safe", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.RequestUnsafe, label: "Request unsafe", tools: [], defaultMode: "confirm" },
     { id: ToolGroupId.RuntimeSafe, label: "Runtime info", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.SitemapSafe, label: "Sitemap", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.ScopeSafe, label: "Scope safe", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.ScopeUnsafe, label: "Scope unsafe", tools: [], defaultMode: "confirm" },
     {
@@ -86,9 +88,12 @@ const createBaseGroups = (): ToolGroup[] =>
     }));
 
 const createDefaultStates = (): Record<string, ToolGroupMode> =>
-    Object.fromEntries(BASE_GROUPS.map((group) => [group.id, group.defaultMode ?? DEFAULT_MODE]));
+    Object.fromEntries(BASE_GROUPS.map((group) => [group.id, group.defaultMode]));
 
 const groupIds = new Set<string>(BASE_GROUPS.map((group) => group.id));
+const visibleGroupIds = new Set<string>(
+    BASE_GROUPS.filter((group) => !HIDDEN_GROUP_IDS.has(group.id)).map((group) => group.id),
+);
 
 const LEGACY_GROUP_ID_MIGRATIONS: Record<string, ToolGroupId> = {
     "temper-safe": ToolGroupId.TamperSafe,
@@ -162,7 +167,9 @@ export class ToolPermissionsStore {
     getPermissions(): ToolPermissions {
         return {
             groups: this.groups.filter((group) => !HIDDEN_GROUP_IDS.has(group.id)),
-            states: this.states,
+            states: Object.fromEntries(
+                Object.entries(this.states).filter(([groupId]) => visibleGroupIds.has(groupId)),
+            ),
         };
     }
 
@@ -186,17 +193,26 @@ export class ToolPermissionsStore {
     }
 
     async setGroupMode(groupId: string, mode: ToolGroupMode): Promise<ToolPermissions> {
-        if (!groupIds.has(groupId)) {
+        if (!visibleGroupIds.has(groupId)) {
             throw new Error(`Unknown tool group: ${groupId}`);
         }
         if (!isToolGroupMode(mode)) {
             throw new Error(`Invalid tool group mode: ${String(mode)}`);
         }
-        if (HIDDEN_GROUP_IDS.has(groupId)) {
-            this.states = { ...this.states, [groupId]: "auto" };
-            return this.getPermissions();
-        }
         this.states = { ...this.states, [groupId]: mode };
+        await this.save();
+        return this.getPermissions();
+    }
+
+    async setAllGroupModes(mode: ToolGroupMode): Promise<ToolPermissions> {
+        if (!isToolGroupMode(mode)) {
+            throw new Error(`Invalid tool group mode: ${String(mode)}`);
+        }
+        const nextStates = { ...this.states };
+        for (const group of this.groups) {
+            nextStates[group.id] = HIDDEN_GROUP_IDS.has(group.id) ? "auto" : mode;
+        }
+        this.states = nextStates;
         await this.save();
         return this.getPermissions();
     }

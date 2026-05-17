@@ -13,13 +13,35 @@ export const runWebsocket = async (tools: Set<string>) => {
             protocol: "WS",
         });
         const text = getToolText(res);
-        const data = tryParseJSON<{ page_info?: any; items?: Array<{ id?: string | number }> }>(
-            text,
-        );
+        const data = tryParseJSON<{
+            page_info?: any;
+            count?: number;
+            items?: Array<{ id?: string | number; direction?: string }>;
+        }>(text);
         assert(data?.page_info !== undefined, "list_websocket_streams page_info missing");
+        assert(typeof data?.count === "number", "list_websocket_streams count should be number");
         assert(Array.isArray(data?.items), "list_websocket_streams items missing");
         const id = data?.items?.[0]?.id;
         stream_id = id != null ? String(id) : stream_id;
+        const streamDirection = data?.items?.[0]?.direction;
+        if (
+            streamDirection === "BOTH" ||
+            streamDirection === "CLIENT" ||
+            streamDirection === "SERVER"
+        ) {
+            const filteredByDirection = await callTool("list_websocket_streams", {
+                limit: 10,
+                protocol: "WS",
+                stream_direction: streamDirection,
+            });
+            const filteredData = tryParseJSON<{
+                items?: Array<{ direction?: string }>;
+            }>(getToolText(filteredByDirection));
+            assert(
+                filteredData?.items?.every((item) => item.direction === streamDirection) ?? false,
+                "stream_direction should filter streams",
+            );
+        }
 
         const firstPage = await callTool("list_websocket_streams", {
             limit: 1,
@@ -103,6 +125,7 @@ export const runWebsocket = async (tools: Set<string>) => {
         const text = getToolText(res);
         const data = tryParseJSON<{
             page_info?: any;
+            count?: number;
             items?: Array<{
                 id?: string | number;
                 cursor?: string;
@@ -110,6 +133,7 @@ export const runWebsocket = async (tools: Set<string>) => {
             }>;
         }>(text);
         assert(data?.page_info !== undefined, "list_websocket_messages page_info missing");
+        assert(typeof data?.count === "number", "list_websocket_messages count should be number");
         assert(Array.isArray(data?.items), "list_websocket_messages items missing");
         const id = data?.items?.[0]?.id;
         messageId = id != null ? String(id) : messageId;

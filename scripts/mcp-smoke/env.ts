@@ -181,9 +181,8 @@ export const runEnv = async (tools: Set<string>) => {
             if (createdSelectEnvId !== undefined) {
                 const deleteRes = await callTool("delete_environment", { id: createdSelectEnvId });
                 const deleteData = getGraphQLData(getToolText(deleteRes));
-                const deleted_id = (
-                    deleteData as { delete_environment?: { deleted_id?: string } }
-                )?.delete_environment?.deleted_id;
+                const deleted_id = (deleteData as { delete_environment?: { deleted_id?: string } })
+                    ?.delete_environment?.deleted_id;
                 assert(deleted_id === createdSelectEnvId, "env delete failed (select test)");
             }
         }

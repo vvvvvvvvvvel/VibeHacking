@@ -21,18 +21,110 @@
                         <h2>Server</h2>
                         <p>Manage MCP state and connection settings.</p>
                     </div>
-                    <div class="mcp-switch">
-                        <label class="simple-switch">
-                            <input
-                                type="checkbox"
-                                :checked="enabled"
-                                :disabled="isLocked"
-                                @change="onSimpleToggle"
-                            />
-                            <span class="track">
-                                <span class="thumb"></span>
-                            </span>
-                        </label>
+                    <div class="server-actions">
+                        <button
+                            class="icon-btn icon-only"
+                            type="button"
+                            aria-controls="mcp-client-guide"
+                            :aria-expanded="mcpGuideOpen"
+                            aria-label="Toggle MCP client setup guide"
+                            title="Client setup"
+                            @click="mcpGuideOpen = !mcpGuideOpen"
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M12 6.5v14"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linecap="round"
+                                />
+                                <path
+                                    d="M4 4.5h5.2A2.8 2.8 0 0 1 12 7.3v13.2a3.5 3.5 0 0 0-2.8-1.4H4a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linejoin="round"
+                                />
+                                <path
+                                    d="M20 4.5h-5.2A2.8 2.8 0 0 0 12 7.3v13.2a3.5 3.5 0 0 1 2.8-1.4H20a1 1 0 0 0 1-1V5.5a1 1 0 0 0-1-1Z"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+                        </button>
+                        <div class="mcp-switch">
+                            <label class="simple-switch">
+                                <input
+                                    type="checkbox"
+                                    :checked="enabled"
+                                    :disabled="isLocked"
+                                    @change="onSimpleToggle"
+                                />
+                                <span class="track">
+                                    <span class="thumb"></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    v-if="mcpGuideOpen"
+                    id="mcp-client-guide"
+                    class="api-guide mcp-client-guide"
+                    role="region"
+                    aria-label="MCP client setup guide"
+                >
+                    <div class="api-guide__summary">
+                        <span>Use the MCP URL below in your client.</span>
+                        <span>Install the skill when the client supports Codex skills.</span>
+                    </div>
+                    <div class="api-guide__examples">
+                        <div
+                            v-for="example in clientGuideExamples"
+                            :key="example.title"
+                            class="api-guide__example"
+                        >
+                            <div class="api-guide__example-head">
+                                <div>
+                                    <div class="api-guide__method">{{ example.title }}</div>
+                                    <div v-if="example.description" class="api-guide__description">
+                                        {{ example.description }}
+                                    </div>
+                                </div>
+                                <button
+                                    class="icon-btn"
+                                    type="button"
+                                    @click="copyText(example.command, example.copyLabel)"
+                                >
+                                    Copy
+                                </button>
+                            </div>
+                            <pre class="api-guide__code">{{ example.command }}</pre>
+                        </div>
+                    </div>
+                    <div class="skill-link-row">
+                        <div>
+                            <div class="api-guide__method">Caido MCP skill</div>
+                            <a
+                                class="about-link skill-link-row__link"
+                                :href="SKILL_URL"
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                {{ SKILL_URL }}
+                            </a>
+                        </div>
+                        <button
+                            class="icon-btn"
+                            type="button"
+                            @click="copyText(SKILL_URL, 'Skill URL')"
+                        >
+                            Copy link
+                        </button>
                     </div>
                 </div>
 
@@ -115,6 +207,113 @@
                     </div>
                 </div>
 
+                <div class="api-control">
+                    <div class="api-control__head">
+                        <div>
+                            <div class="label">API control</div>
+                            <div class="hint">Localhost-only control endpoint.</div>
+                        </div>
+                        <button
+                            class="icon-btn icon-only api-control__help-btn"
+                            type="button"
+                            aria-controls="api-control-guide"
+                            :aria-expanded="apiGuideOpen"
+                            aria-label="Toggle API control guide"
+                            title="API control guide"
+                            @click="apiGuideOpen = !apiGuideOpen"
+                        >
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path
+                                    d="M12 6.5v14"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linecap="round"
+                                />
+                                <path
+                                    d="M4 4.5h5.2A2.8 2.8 0 0 1 12 7.3v13.2a3.5 3.5 0 0 0-2.8-1.4H4a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1Z"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linejoin="round"
+                                />
+                                <path
+                                    d="M20 4.5h-5.2A2.8 2.8 0 0 0 12 7.3v13.2a3.5 3.5 0 0 1 2.8-1.4H20a1 1 0 0 0 1-1V5.5a1 1 0 0 0-1-1Z"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.6"
+                                    stroke-linejoin="round"
+                                />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="api-control__grid">
+                        <div class="api-control__field">
+                            <div class="label">URL</div>
+                            <div class="api-control__value-row">
+                                <div class="value mono api-control__value">
+                                    {{ settings?.controlUrl ?? "—" }}
+                                </div>
+                                <button
+                                    class="icon-btn icon-only"
+                                    type="button"
+                                    :disabled="!settings"
+                                    aria-label="Copy API control URL"
+                                    title="Copy URL"
+                                    @click="copyControlUrl"
+                                >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path
+                                            d="M9 9a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2V9zm-5 6V6a2 2 0 0 1 2-2h9"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="1.6"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        v-if="apiGuideOpen"
+                        id="api-control-guide"
+                        class="api-guide"
+                        role="region"
+                        aria-label="API control guide"
+                    >
+                        <div class="api-guide__summary">
+                            <span>POST JSON to the control URL from localhost.</span>
+                            <span>All responses use { ok, result | error }.</span>
+                        </div>
+                        <div class="api-guide__examples">
+                            <div
+                                v-for="example in apiGuideExamples"
+                                :key="example.method"
+                                class="api-guide__example"
+                            >
+                                <div class="api-guide__example-head">
+                                    <div>
+                                        <div class="api-guide__method">{{ example.method }}</div>
+                                        <div class="api-guide__description">
+                                            {{ example.description }}
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="icon-btn"
+                                        type="button"
+                                        @click="copyText(example.command, `${example.method} curl`)"
+                                    >
+                                        Copy
+                                    </button>
+                                </div>
+                                <pre class="api-guide__code">{{ example.command }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="panel-actions">
                     <button
                         class="apply-btn"
@@ -137,7 +336,7 @@
 
                 <div v-if="!toolPermissions" class="tools-empty">Loading tool settings...</div>
                 <div v-else class="tools-list">
-                    <div class="tool-row tool-row--bulk">
+                    <div class="tool-row">
                         <div class="tool-info">
                             <div class="tool-title">All groups</div>
                             <div class="tool-meta">
@@ -271,20 +470,21 @@ const loading = ref(true);
 const busy = ref(false);
 const draftHost = ref("");
 const draftPort = ref<number | undefined>(undefined);
-type ToolModeChoice = ToolGroupMode | "auto-start";
-const toolModeOptions: { value: ToolModeChoice; label: string }[] = [
+const mcpGuideOpen = ref(false);
+const apiGuideOpen = ref(false);
+const stopBackendEvents: Array<() => void> = [];
+const SKILL_URL = "https://github.com/vvvvvvvvvvel/VibeHacking/blob/main/SKILL.md";
+type ClientGuideExample = {
+    title: string;
+    description?: string;
+    command: string;
+    copyLabel: string;
+};
+const toolModeOptions: { value: ToolGroupMode; label: string }[] = [
     { value: "auto", label: "Auto run" },
-    { value: "auto-start", label: "Auto run + start" },
     { value: "confirm", label: "Ask to confirm" },
     { value: "disabled", label: "Disabled" },
 ];
-
-const resolveModeChoice = (
-    choice: ToolModeChoice,
-): { mode: ToolGroupMode; startServer: boolean } => {
-    if (choice === "auto-start") return { mode: "auto", startServer: true };
-    return { mode: choice, startServer: false };
-};
 
 const isLocked = computed(() => loading.value || busy.value);
 
@@ -293,9 +493,9 @@ const statusText = computed(() => {
     return enabled.value ? "Enabled" : "Disabled";
 });
 
-const statusLabel = computed(() => (enabled.value ? "Running" : "Stopped"));
+const statusLabel = computed(() => (enabled.value ? "MCP running" : "MCP stopped"));
 const statusHint = computed(() =>
-    enabled.value ? "Server is accepting requests." : "Server is stopped.",
+    enabled.value ? "MCP endpoint is accepting requests." : "API control remains available.",
 );
 
 const applySettings = (next: McpSettings) => {
@@ -305,9 +505,9 @@ const applySettings = (next: McpSettings) => {
     draftPort.value = next.port;
 };
 
-const initialize = async () => {
+const initializeServer = async () => {
     try {
-        await sdk.backend.initialize();
+        await sdk.backend.initializeMcpServer();
     } catch (err) {
         sdk.window.showToast(`Failed to initialize MCP.\n${err}`, {
             variant: "error",
@@ -317,7 +517,7 @@ const initialize = async () => {
 
 const fetchSettings = async () => {
     try {
-        const next = await sdk.backend.getSettings();
+        const next = await sdk.backend.getMcpServerSettings();
         applySettings(next);
     } catch (err) {
         sdk.window.showToast(`Failed to load MCP settings.\n${err}`, {
@@ -330,7 +530,7 @@ const fetchSettings = async () => {
 
 const fetchToolPermissions = async () => {
     try {
-        toolPermissions.value = await sdk.backend.getToolPermissions();
+        toolPermissions.value = await sdk.backend.getToolGroupPermissionModes();
     } catch (err) {
         sdk.window.showToast(`Failed to load tool settings.\n${err}`, {
             variant: "error",
@@ -338,27 +538,39 @@ const fetchToolPermissions = async () => {
     }
 };
 
-const onToolModeSelect = (groupId: string, choice: ToolModeChoice, event: Event) => {
+const registerBackendStateEvents = () => {
+    if (stopBackendEvents.length > 0) return;
+    stopBackendEvents.push(
+        sdk.backend.onEvent("vibe-hacking:mcp-server-settings-changed", (next) => {
+            applySettings(next);
+        }).stop,
+    );
+    stopBackendEvents.push(
+        sdk.backend.onEvent("vibe-hacking:tool-group-permission-modes-changed", (next) => {
+            toolPermissions.value = next;
+        }).stop,
+    );
+};
+
+const onToolModeSelect = (groupId: string, mode: ToolGroupMode, event: Event) => {
     const target = event.currentTarget;
     if (target instanceof HTMLElement) {
         const details = target.closest("details");
         if (details) details.removeAttribute("open");
     }
-    const { mode, startServer } = resolveModeChoice(choice);
     void updateToolGroupMode(groupId, mode);
-    if (startServer && !enabled.value) void onToggle(true);
 };
 
-const modeLabel = (mode: ToolModeChoice) =>
+const modeLabel = (mode: ToolGroupMode) =>
     toolModeOptions.find((option) => option.value === mode)?.label ?? "Ask to confirm";
 
 const bulkMode = computed<ToolGroupMode | undefined>(() => {
     const perms = toolPermissions.value;
     if (!perms || perms.groups.length === 0) return undefined;
-    const first = perms.states[perms.groups[0].id] ?? "confirm";
-    const allSame = perms.groups.every(
-        (group) => (perms.states[group.id] ?? "confirm") === first,
-    );
+    const firstGroup = perms.groups[0];
+    if (firstGroup === undefined) return undefined;
+    const first = perms.states[firstGroup.id] ?? "confirm";
+    const allSame = perms.groups.every((group) => (perms.states[group.id] ?? "confirm") === first);
     return allSame ? first : undefined;
 });
 
@@ -368,15 +580,13 @@ const bulkLabel = computed(() => {
     return modeLabel(mode);
 });
 
-const onBulkModeSelect = (choice: ToolModeChoice, event: Event) => {
+const onBulkModeSelect = (mode: ToolGroupMode, event: Event) => {
     const target = event.currentTarget;
     if (target instanceof HTMLElement) {
         const details = target.closest("details");
         if (details) details.removeAttribute("open");
     }
-    const { mode, startServer } = resolveModeChoice(choice);
     void applyBulkMode(mode);
-    if (startServer && !enabled.value) void onToggle(true);
 };
 
 const applyBulkMode = async (mode: ToolGroupMode) => {
@@ -388,11 +598,7 @@ const applyBulkMode = async (mode: ToolGroupMode) => {
     for (const id of groupIds) nextBusy[id] = true;
     toolBusy.value = nextBusy;
     try {
-        let latest: ToolPermissions | undefined;
-        for (const id of groupIds) {
-            latest = await sdk.backend.setToolGroupMode(id, mode);
-        }
-        if (latest) toolPermissions.value = latest;
+        toolPermissions.value = await sdk.backend.setAllToolGroupPermissionModes(mode);
     } catch (err) {
         sdk.window.showToast(`Failed to update tool groups.\n${err}`, {
             variant: "error",
@@ -408,7 +614,7 @@ const applyBulkMode = async (mode: ToolGroupMode) => {
 const updateToolGroupMode = async (groupId: string, mode: ToolGroupMode) => {
     toolBusy.value = { ...toolBusy.value, [groupId]: true };
     try {
-        toolPermissions.value = await sdk.backend.setToolGroupMode(groupId, mode);
+        toolPermissions.value = await sdk.backend.setToolGroupPermissionMode(groupId, mode);
     } catch (err) {
         sdk.window.showToast(`Failed to update tool group.\n${err}`, {
             variant: "error",
@@ -445,19 +651,85 @@ const resetPort = () => {
     draftPort.value = settings.value.port;
 };
 
-const copyUrl = async () => {
-    if (settings.value === undefined || settings.value === null) return;
+const copyText = async (value: string | undefined, label: string) => {
+    if (value === undefined || value === "") return;
     try {
         if (typeof navigator === "undefined" || navigator.clipboard === undefined) {
             sdk.window.showToast("Clipboard is not available.", { variant: "error" });
             return;
         }
-        await navigator.clipboard.writeText(settings.value.url);
-        sdk.window.showToast("URL copied.", { variant: "success" }); //
+        await navigator.clipboard.writeText(value);
+        sdk.window.showToast(`${label} copied.`, { variant: "success" });
     } catch {
-        sdk.window.showToast("Failed to copy URL.", { variant: "error" });
+        sdk.window.showToast(`Failed to copy ${label.toLowerCase()}.`, { variant: "error" });
     }
 };
+
+const copyUrl = async () => {
+    await copyText(settings.value?.url, "URL");
+};
+
+const copyControlUrl = async () => {
+    await copyText(settings.value?.controlUrl, "API control URL");
+};
+
+const mcpUrl = computed(() => settings.value?.url ?? "http://127.0.0.1:3333/mcp");
+const controlUrl = computed(() => settings.value?.controlUrl ?? "http://127.0.0.1:3333/control");
+
+const controlCurl = (payload: string) =>
+    `curl -sS -X POST "${controlUrl.value}" -H "content-type: application/json" -d '${payload}'`;
+
+const clientGuideExamples = computed<ClientGuideExample[]>(() => [
+    {
+        title: "Codex",
+        command: `codex mcp add caido --url ${mcpUrl.value}`,
+        copyLabel: "Codex command",
+    },
+    {
+        title: "Claude",
+        command: `claude mcp add --transport http caido ${mcpUrl.value}`,
+        copyLabel: "Claude command",
+    },
+]);
+
+const apiGuideExamples = computed(() => [
+    {
+        method: "getMcpServerSettings",
+        description: "Read MCP enabled state, host, port, MCP URL, and control URL.",
+        command: controlCurl('{"method":"getMcpServerSettings"}'),
+    },
+    {
+        method: "setMcpServerEnabled",
+        description: "Enable or disable the MCP endpoint while keeping control available.",
+        command: controlCurl('{"method":"setMcpServerEnabled","params":{"enabled":true}}'),
+    },
+    {
+        method: "updateMcpServerConfig",
+        description: "Change MCP bind host and TCP port.",
+        command: controlCurl(
+            '{"method":"updateMcpServerConfig","params":{"host":"127.0.0.1","port":3333}}',
+        ),
+    },
+    {
+        method: "getToolGroupPermissionModes",
+        description: "Read visible tool groups and their current modes.",
+        command: controlCurl('{"method":"getToolGroupPermissionModes"}'),
+    },
+    {
+        method: "setToolGroupPermissionMode",
+        description: "Set one visible tool group to auto, confirm, or disabled.",
+        command: controlCurl(
+            '{"method":"setToolGroupPermissionMode","params":{"groupId":"request-safe","mode":"confirm"}}',
+        ),
+    },
+    {
+        method: "setAllToolGroupPermissionModes",
+        description: "Apply one mode to every visible tool group.",
+        command: controlCurl(
+            '{"method":"setAllToolGroupPermissionModes","params":{"mode":"disabled"}}',
+        ),
+    },
+]);
 
 const canApply = computed(() => {
     if (settings.value === undefined || settings.value === null) return false;
@@ -473,7 +745,7 @@ const applyConfig = async () => {
     }
     busy.value = true;
     try {
-        const next = await sdk.backend.setConfig({
+        const next = await sdk.backend.updateMcpServerConfig({
             host: draftHost.value.trim(),
             port: Number(draftPort.value),
         });
@@ -500,7 +772,7 @@ const onToggle = async (value: boolean) => {
     enabled.value = value;
     busy.value = true;
     try {
-        const next = await sdk.backend.setEnabled(value);
+        const next = await sdk.backend.setMcpServerEnabled(value);
         applySettings(next);
         sdk.window.showToast(next.enabled ? "MCP server enabled." : "MCP server disabled.", {
             variant: "success",
@@ -516,9 +788,9 @@ const onToggle = async (value: boolean) => {
 };
 
 onMounted(async () => {
-    void (await initialize());
-    void (await fetchSettings());
-    void (await fetchToolPermissions());
+    registerBackendStateEvents();
+    await initializeServer();
+    await Promise.all([fetchSettings(), fetchToolPermissions()]);
     const doc = typeof document === "undefined" ? undefined : document;
     if (doc !== undefined) {
         doc.addEventListener("click", handleOutsideClick);
@@ -526,6 +798,9 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+    while (stopBackendEvents.length > 0) {
+        stopBackendEvents.pop()?.();
+    }
     const doc = typeof document === "undefined" ? undefined : document;
     if (doc !== undefined) {
         doc.removeEventListener("click", handleOutsideClick);

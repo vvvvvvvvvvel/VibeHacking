@@ -9,6 +9,7 @@ import { runRequests } from "./requests";
 import { runFindings } from "./findings";
 import { runFilters } from "./filters";
 import { runScope } from "./scope";
+import { runSitemap } from "./sitemap";
 import { runTamper } from "./tamper";
 import { runReplay } from "./replay";
 import { runWebsocket } from "./websocket";
@@ -23,6 +24,7 @@ const TOOL_RUNNERS: Record<string, (tools: Set<string>) => Promise<void>> = {
     findings: runFindings,
     filters: runFilters,
     scope: runScope,
+    sitemap: runSitemap,
     tamper: runTamper,
     replay: runReplay,
     websocket: runWebsocket,

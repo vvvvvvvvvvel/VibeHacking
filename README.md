@@ -28,6 +28,26 @@ A Caido MCP plugin that exposes a clean, safe, and well‑documented tool surfac
 - Use the **Tools** section to set each group to `auto`, `confirm`, or `disabled`.
 - Call tools from your agent and rely on consistent JSON outputs.
 
+## API Control
+
+The plugin exposes a localhost-only control endpoint at `http://127.0.0.1:<port>/control`.
+When MCP also listens on a local host, both endpoints share one server. When MCP listens on
+another interface, control stays local on the same port.
+
+```bash
+curl -sS -X POST "$CONTROL_URL" \
+  -H "content-type: application/json" \
+  -d '{"method":"setMcpServerEnabled","params":{"enabled":true}}'
+```
+
+Control requests are accepted only when the TCP peer is loopback, for example `127.0.0.1`
+or `::1`. If MCP is bound to `0.0.0.0`, the control route is still served by that listener,
+but non-loopback peers receive `403`.
+
+Supported methods: `getMcpServerSettings`, `setMcpServerEnabled`,
+`updateMcpServerConfig`, `getToolGroupPermissionModes`, `setToolGroupPermissionMode`,
+and `setAllToolGroupPermissionModes`.
+
 ## Tooling Notes
 
 - Some tools accept arrays even when the name is singular — this is intentional to support batch operations while keeping UI labels simple.
@@ -36,6 +56,11 @@ A Caido MCP plugin that exposes a clean, safe, and well‑documented tool surfac
 - `list_requests.filter` is a raw HTTPQL string for method, host, status, port, time, path, raw, and row constraints.
 - HTTP body output uses `{ encoding, size, text|base64, omitted_reason }`. Raw request/response bytes are returned only when requested through `fields`.
 - `list_requests.serialization.include_body=false` by default for broad discovery; set it to `true` or request body/raw paths explicitly through `fields`.
+- Sitemap tools expose Caido's deduplicated Sitemap tree; use `list_sitemap_roots` / `list_sitemap_descendants` for tree discovery and `list_sitemap_entry_requests` for cursor-paginated requests attached to one entry.
+- Sitemap entry lists use offset pagination and return `has_more` / `next_offset`; they do not expose unusable GraphQL cursors.
+- Sitemap entry lists use `request_limit=0` by default, which returns request counts without samples; set `request_limit>0` when projecting `requests.items.*`.
+- Nested Sitemap `requests` include only `count` and optional sampled `items`; use `list_sitemap_entry_requests` for request pagination cursors.
+- `list_sitemap_entry_requests` returns concrete HTTP history-shaped items and supports the same `serialization`, `regex_excerpt`, `fields`, and `exclude_fields` controls as `list_requests`.
 - `fields` and `exclude_fields` project item payloads while preserving envelopes such as `page_info`, `items`, `requested`, `found`, and `results`.
 
 ## Core Tool Catalog
@@ -57,6 +82,13 @@ WebSocket/SSE:
 - `list_websocket_messages`
 - `get_websocket_messages_by_ids`
 - `get_websocket_message_edits_by_ids`
+
+Sitemap:
+
+- `list_sitemap_roots`
+- `list_sitemap_descendants`
+- `get_sitemap_entries_by_ids`
+- `list_sitemap_entry_requests`
 
 Environment:
 

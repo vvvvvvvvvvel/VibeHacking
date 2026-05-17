@@ -39,7 +39,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
         action: "sdk.scope.list",
         group: ToolGroupId.ScopeSafe,
         toolName: "list_scopes",
-        description: "List scopes. Example: {}.",
+        description: "List scopes.",
         inputSchema: scopeGetAllSchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_SCOPES_QUERY);
@@ -53,7 +53,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
         action: "sdk.scope.get",
         group: ToolGroupId.ScopeSafe,
         toolName: "get_scope",
-        description: 'Get scopes by ID. Example: { "ids": [1] }.',
+        description: "Get scopes by ID.",
         inputSchema: scopeIdBatchSchema,
         handler: async (params) => {
             const { ids } = scopeIdBatchSchema.parse(params);
@@ -113,7 +113,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
         action: "sdk.scope.rename",
         group: ToolGroupId.ScopeSafe,
         toolName: "rename_scope",
-        description: 'Rename scopes. Example: { "items": [{ "id": 1, "name": "New name" }] }.',
+        description: "Rename scopes.",
         inputSchema: scopeRenameSchema,
         handler: async (params) => {
             const { items } = scopeRenameSchema.parse(params);
@@ -133,7 +133,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
         action: "sdk.scope.delete",
         group: ToolGroupId.ScopeUnsafe,
         toolName: "delete_scope",
-        description: 'Delete scopes by ID. Example: { "ids": [1] }.',
+        description: "Delete scopes by ID.",
         inputSchema: scopeIdBatchSchema,
         handler: async (params) => {
             const { ids } = scopeIdBatchSchema.parse(params);

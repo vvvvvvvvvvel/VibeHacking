@@ -39,7 +39,7 @@ export class ConfirmActionStore {
         return { id, promise };
     }
 
-    async resolvePendingAction(id: number, confirmed: boolean) {
+    async resolveToolActionConfirmation(id: number, confirmed: boolean) {
         if (!Number.isFinite(id)) return null;
         const pending = this.pendingActions.get(id);
         if (!pending) return null;

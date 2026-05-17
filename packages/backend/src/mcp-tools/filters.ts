@@ -59,7 +59,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.filters.list",
         group: ToolGroupId.FilterSafe,
         toolName: "list_filter_presets",
-        description: "List saved HTTPQL filters. Example: {}.",
+        description: "List saved HTTPQL filters.",
         inputSchema: listFilterPresetsSchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_FILTER_PRESETS_QUERY);
@@ -86,7 +86,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.filters.get",
         group: ToolGroupId.FilterSafe,
         toolName: "get_filter_preset",
-        description: 'Get saved filters by ID. Example: { "ids": [1] }.',
+        description: "Get saved filters by ID.",
         inputSchema: getFilterPresetSchema,
         handler: async (params) => {
             const { ids } = getFilterPresetSchema.parse(params);
@@ -202,7 +202,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.filters.delete",
         group: ToolGroupId.FilterUnsafe,
         toolName: "delete_filter_preset",
-        description: 'Delete saved filters by ID. Example: { "ids": [1] }.',
+        description: "Delete saved filters by ID.",
         inputSchema: deleteFilterPresetSchema,
         handler: async (params) => {
             const { ids } = deleteFilterPresetSchema.parse(params);

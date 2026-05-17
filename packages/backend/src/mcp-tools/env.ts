@@ -63,9 +63,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.getVar",
         group: ToolGroupId.EnvSafe,
         toolName: "get_environment_variable",
-        description:
-            "Get one variable from the environment context (selected + global). " +
-            'Example: { "name": "PATH" }.',
+        description: "Get one variable from the environment context (selected + global).",
         inputSchema: envVarSchema,
         handler: (params) => {
             const { name } = params as { name: string };
@@ -79,8 +77,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.getVars",
         group: ToolGroupId.EnvSafe,
         toolName: "list_environment_variables",
-        description:
-            "List variables from the environment context (selected + global). Example: {}.",
+        description: "List variables from the environment context (selected + global).",
         inputSchema: envVarsSchema,
         handler: () => {
             const vars = sdk.env.getVars().map((variable) => ({
@@ -125,7 +122,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.list",
         group: ToolGroupId.EnvSafe,
         toolName: "list_environments",
-        description: "List all environments with variables. Example: {}.",
+        description: "List all environments with variables.",
         inputSchema: envVarsSchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_ENVIRONMENTS_QUERY);
@@ -139,7 +136,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.getInfo",
         group: ToolGroupId.EnvSafe,
         toolName: "get_environment",
-        description: 'Get an environment record by ID. Example: { "id": 1 }.',
+        description: "Get an environment record by ID.",
         inputSchema: envIdSchema,
         handler: async (params) => {
             const response = await sdk.graphql.execute(GET_ENVIRONMENT_QUERY, params);
@@ -153,7 +150,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.getContext",
         group: ToolGroupId.EnvSafe,
         toolName: "get_environment_context",
-        description: "Get environment context (selected + global). Example: {}.",
+        description: "Get environment context (selected + global).",
         inputSchema: envVarsSchema,
         handler: async () => {
             const response = await sdk.graphql.execute(GET_ENVIRONMENT_CONTEXT_QUERY);
@@ -250,7 +247,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.delete",
         group: ToolGroupId.EnvUnsafe,
         toolName: "delete_environment",
-        description: 'Delete an environment by ID. Example: { "id": 3 }.',
+        description: "Delete an environment by ID.",
         inputSchema: envIdSchema,
         handler: async (params) => {
             const response = await sdk.graphql.execute(DELETE_ENVIRONMENT_MUTATION, params);
@@ -264,9 +261,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         action: "sdk.env.select",
         group: ToolGroupId.EnvSafe,
         toolName: "select_environment",
-        description:
-            "Select the active environment. " +
-            'Example: { "id": 4 } or { "id": null } to clear selection.',
+        description: "Select the active environment; pass id=null to clear selection.",
         inputSchema: envSelectSchema,
         handler: async (params) => {
             const input = params as { id?: string };

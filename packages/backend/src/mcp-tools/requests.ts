@@ -4,28 +4,25 @@ import { z } from "zod";
 import {
     applyProjectionToLookupResults,
     applyProjectionToResults,
-    buildMatchContext,
-    DEFAULT_MAX_BINARY_BODY_BYTES,
-    DEFAULT_MAX_TEXT_BODY_CHARS,
+    buildHttpMatchContext,
     HTTP_HISTORY_FIELD_PATHS,
     normalizeHttpSerialization,
+    normalizeRegexExcerptProjection,
     previewValue,
     resolveFieldProjection,
-    resolveHttpMaterialization,
+    resolveHttpBodyMaterialization,
     resolveRegexExcerpt,
-    serializeHttpRequest,
+    serializeHttpHistoryEntry,
     serializeHttpResponse,
-    validateRegexExcerptProjection,
 } from "../history";
 import type {
     FieldProjection,
     HttpSerializationOptions,
-    MatchContext,
     ProjectedHttpSerializationOptionsInput,
-    SerializedHttpHistoryEntry,
 } from "../history";
 import { ToolGroupId } from "../tool-permissions";
 
+import { httpSerializationSchema, listHttpSerializationSchema } from "./http-serialization-schema";
 import { registerToolAction, type ToolContext } from "./register";
 import {
     HTTPQL_HELP_SHORT,
@@ -36,7 +33,6 @@ import {
     validateHttpqlClause,
 } from "./shared";
 
-type RequestPair = Awaited<ReturnType<ToolContext["sdk"]["requests"]["get"]>>;
 type RequestQuery = ReturnType<ToolContext["sdk"]["requests"]["query"]>;
 
 type ListRequestInput = {
@@ -70,88 +66,6 @@ const idSchema = z.preprocess(
 );
 
 const idArraySchema = z.array(idSchema).min(1);
-
-const DEFAULT_REGEX_EXCERPT_CONTEXT_CHARS = 10;
-
-const defaultListHttpSerialization = {
-    include_body: false,
-    include_binary: false,
-    max_text_body_chars: DEFAULT_MAX_TEXT_BODY_CHARS,
-    text_overflow_mode: "omit" as const,
-    max_binary_body_bytes: DEFAULT_MAX_BINARY_BODY_BYTES,
-} satisfies ProjectedHttpSerializationOptionsInput;
-
-const defaultHttpSerialization = {
-    include_body: true,
-    include_binary: false,
-    max_text_body_chars: DEFAULT_MAX_TEXT_BODY_CHARS,
-    text_overflow_mode: "omit" as const,
-    max_binary_body_bytes: DEFAULT_MAX_BINARY_BODY_BYTES,
-} satisfies ProjectedHttpSerializationOptionsInput;
-
-const regexExcerptSchema = z
-    .object({
-        context_chars: z.number().int().min(0).default(DEFAULT_REGEX_EXCERPT_CONTEXT_CHARS),
-        regex: z.string().min(1).optional(),
-    })
-    .strict();
-
-const makeSerializationSchema = (defaults: ProjectedHttpSerializationOptionsInput) => {
-    const fieldDefaults = {
-        include_body: defaults.include_body ?? true,
-        include_binary: defaults.include_binary ?? false,
-        max_text_body_chars: defaults.max_text_body_chars ?? DEFAULT_MAX_TEXT_BODY_CHARS,
-        max_request_body_chars: defaults.max_request_body_chars ?? null,
-        max_response_body_chars: defaults.max_response_body_chars ?? null,
-        text_overflow_mode: defaults.text_overflow_mode ?? "omit",
-        max_binary_body_bytes: defaults.max_binary_body_bytes ?? DEFAULT_MAX_BINARY_BODY_BYTES,
-        regex_excerpt: null,
-    } as const;
-    const objectDefault = {
-        ...fieldDefaults,
-        max_request_body_chars: undefined,
-        max_response_body_chars: undefined,
-        regex_excerpt: undefined,
-    };
-    return z
-        .object({
-            include_body: z.boolean().default(fieldDefaults.include_body),
-            include_binary: z.boolean().default(fieldDefaults.include_binary),
-            max_text_body_chars: z.number().int().min(0).default(fieldDefaults.max_text_body_chars),
-            max_request_body_chars: z
-                .number()
-                .int()
-                .min(0)
-                .nullable()
-                .default(null)
-                .transform((value) => value ?? undefined),
-            max_response_body_chars: z
-                .number()
-                .int()
-                .min(0)
-                .nullable()
-                .default(null)
-                .transform((value) => value ?? undefined),
-            text_overflow_mode: z
-                .enum(["truncate", "omit"])
-                .default(fieldDefaults.text_overflow_mode),
-            max_binary_body_bytes: z
-                .number()
-                .int()
-                .min(0)
-                .default(fieldDefaults.max_binary_body_bytes),
-            regex_excerpt: regexExcerptSchema
-                .nullable()
-                .default(null)
-                .transform((value) => value ?? undefined),
-        })
-        .strict()
-        .default(objectDefault);
-};
-
-const listSerializationSchema = makeSerializationSchema(defaultListHttpSerialization);
-
-const serializationSchema = makeSerializationSchema(defaultHttpSerialization);
 
 const orderSchema = z.preprocess(
     (value) =>
@@ -198,7 +112,7 @@ const listRequestsSchema = z
         cursor: z.string().min(1).optional(),
         direction: z.enum(["after", "before"]).default("after"),
         order: orderSchema,
-        serialization: listSerializationSchema,
+        serialization: listHttpSerializationSchema,
         fields: z
             .array(z.string().min(1))
             .nullable()
@@ -215,7 +129,7 @@ const listRequestsSchema = z
 const getRequestsSchema = z
     .object({
         ids: idArraySchema,
-        serialization: serializationSchema,
+        serialization: httpSerializationSchema,
         fields: z
             .array(z.string().min(1))
             .nullable()
@@ -258,7 +172,7 @@ const sendRequestsSchema = z
     .object({
         ids: idArraySchema,
         options: sendRequestOptionsSchema.nullable().optional(),
-        serialization: serializationSchema,
+        serialization: httpSerializationSchema,
     })
     .strict();
 
@@ -286,65 +200,6 @@ const summarySchema = z
         filter: z.string().min(1).optional(),
     })
     .strict();
-
-const bodyText = (body?: { toText?: () => string }) => {
-    try {
-        return body?.toText?.();
-    } catch {
-        return undefined;
-    }
-};
-
-const requestMatchSources = (pair: RequestPair) => {
-    const request = pair?.request;
-    if (request === undefined) return [];
-    const response = pair?.response;
-    return [
-        { path: "request.method", text: request.getMethod() },
-        { path: "request.url", text: request.getUrl() },
-        { path: "request.headers", text: JSON.stringify(request.getHeaders()) },
-        { path: "request.body.text", text: bodyText(request.getBody()) },
-        { path: "request.raw.text", text: bodyText(request.getRaw()) },
-        { path: "response.status_code", text: response?.getCode()?.toString() },
-        { path: "response.headers", text: JSON.stringify(response?.getHeaders() ?? {}) },
-        { path: "response.body.text", text: bodyText(response?.getBody()) },
-        { path: "response.raw.text", text: bodyText(response?.getRaw()) },
-    ];
-};
-
-const serializedEntry = (
-    sdk: ToolContext["sdk"],
-    pair: RequestPair,
-    options: HttpSerializationOptions,
-    matchContext: MatchContext | undefined,
-): SerializedHttpHistoryEntry | undefined => {
-    if (pair?.request === undefined) return undefined;
-    const inScope = sdk.requests.inScope(pair.request);
-    return {
-        id: toNumericId(String(pair.request.getId())),
-        time: pair.request.getCreatedAt().toISOString(),
-        inScope,
-        request: { ...serializeHttpRequest(pair.request, options), inScope },
-        response: serializeHttpResponse(pair.response, options),
-        matchContext,
-    };
-};
-
-const resolveBodyMaterialization = (
-    input: { serialization?: ProjectedHttpSerializationOptionsInput },
-    projection: FieldProjection | undefined,
-    regexExcerptEnabled: boolean,
-    defaultIncludeBody: boolean,
-) => {
-    const materialization = resolveHttpMaterialization(projection, regexExcerptEnabled);
-    if (projection?.fields !== undefined) return materialization;
-    const includeBody = input.serialization?.include_body ?? defaultIncludeBody;
-    return {
-        ...materialization,
-        includeRequestBody: materialization.includeRequestBody && includeBody,
-        includeResponseBody: materialization.includeResponseBody && includeBody,
-    };
-};
 
 const applyRequestOrder = <T extends RequestQuery>(
     query: T,
@@ -389,15 +244,16 @@ const queryRequestPage = async (
     const regex_excerpt = resolveRegexExcerpt(input.serialization);
     const items = page.items
         .map((item) => {
-            const pair = { request: item.request, response: item.response } as RequestPair;
-            const preliminary = serializedEntry(sdk, pair, options, undefined);
-            if (preliminary === undefined) return undefined;
-            const matchContext = buildMatchContext(requestMatchSources(pair), regex_excerpt);
-            return {
-                cursor: String(item.cursor),
-                ...preliminary,
+            const pair = { request: item.request, response: item.response };
+            const matchContext = buildHttpMatchContext(pair, regex_excerpt);
+            return serializeHttpHistoryEntry({
+                pair,
+                options,
                 matchContext,
-            };
+                inScope:
+                    item.request === undefined ? undefined : sdk.requests.inScope(item.request),
+                cursor: String(item.cursor),
+            });
         })
         .filter((item) => item !== undefined);
     return {
@@ -450,14 +306,14 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         inputSchema: listRequestsSchema,
         handler: async (params) => {
             const input = listRequestsSchema.parse(params) as ListRequestInput;
-            const projection = resolveFieldProjection({
+            let projection = resolveFieldProjection({
                 fields: input.fields,
                 excludeFields: input.exclude_fields,
                 allowedPaths: HTTP_HISTORY_FIELD_PATHS,
             });
             const regexExcerptEnabled = input.serialization?.regex_excerpt !== undefined;
-            validateRegexExcerptProjection(regexExcerptEnabled, projection);
-            const materialization = resolveBodyMaterialization(
+            projection = normalizeRegexExcerptProjection(regexExcerptEnabled, projection);
+            const materialization = resolveHttpBodyMaterialization(
                 input,
                 projection,
                 regexExcerptEnabled,
@@ -479,14 +335,14 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         inputSchema: getRequestsSchema,
         handler: async (params) => {
             const input = getRequestsSchema.parse(params) as RequestLookupInput;
-            const projection = resolveFieldProjection({
+            let projection = resolveFieldProjection({
                 fields: input.fields,
                 excludeFields: input.exclude_fields,
                 allowedPaths: HTTP_HISTORY_FIELD_PATHS,
             });
             const regexExcerptEnabled = input.serialization?.regex_excerpt !== undefined;
-            validateRegexExcerptProjection(regexExcerptEnabled, projection);
-            const materialization = resolveBodyMaterialization(
+            projection = normalizeRegexExcerptProjection(regexExcerptEnabled, projection);
+            const materialization = resolveHttpBodyMaterialization(
                 input,
                 projection,
                 regexExcerptEnabled,
@@ -501,13 +357,18 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
                     results.push({ id, error: "not found" });
                     continue;
                 }
-                const preliminary = serializedEntry(sdk, pair, serialization, undefined);
+                const matchContext = buildHttpMatchContext(pair, regex_excerpt);
+                const preliminary = serializeHttpHistoryEntry({
+                    pair,
+                    options: serialization,
+                    matchContext,
+                    inScope: sdk.requests.inScope(pair.request),
+                });
                 if (preliminary === undefined) {
                     results.push({ id, error: "not found" });
                     continue;
                 }
-                const matchContext = buildMatchContext(requestMatchSources(pair), regex_excerpt);
-                results.push({ id, item: { ...preliminary, matchContext } });
+                results.push({ id, item: preliminary });
             }
             const payload = {
                 requested: input.ids.length,
@@ -522,11 +383,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         action: "sdk.requests.match",
         group: ToolGroupId.RequestSafe,
         toolName: "match_requests",
-        description:
-            "Check saved requests against an HTTPQL clause. " +
-            'Example: { "httpql": "req.method.eq:\\"POST\\"", "ids": [1] }.' +
-            "\n\n" +
-            HTTPQL_HELP_SHORT,
+        description: "Check saved requests against an HTTPQL clause. " + "\n\n" + HTTPQL_HELP_SHORT,
         inputSchema: matchRequestsSchema,
         handler: async (params) => {
             const { httpql, ids } = matchRequestsSchema.parse(params);
@@ -605,9 +462,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         action: "sdk.requests.scope",
         group: ToolGroupId.RequestSafe,
         toolName: "check_requests_scope",
-        description:
-            "Check whether saved requests are in Caido scope. " +
-            'Example: { "items": [{ "ids": [1], "scope_ids": [1] }] }.',
+        description: "Check whether saved requests are in Caido scope.",
         inputSchema: scopeCheckSchema,
         handler: async (params) => {
             const { items } = scopeCheckSchema.parse(params);

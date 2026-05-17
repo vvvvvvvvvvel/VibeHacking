@@ -18,7 +18,6 @@ export const registerProjectTools = ({ server, sdk, store, permissions }: ToolCo
         toolName: "get_project_info",
         description:
             "Get a field from the current project. " +
-            'Example: { "field": "full" }. ' +
             'If field is omitted, it defaults to "full". ' +
             'Use field="full" to return all fields. ' +
             "If no project is selected, returns (no project selected).",

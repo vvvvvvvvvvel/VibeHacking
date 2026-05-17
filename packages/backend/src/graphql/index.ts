@@ -4,5 +4,6 @@ export * from "./tamper";
 export * from "./findings";
 export * from "./hosted-files";
 export * from "./scopes";
+export * from "./sitemap";
 export * from "./websocket";
 export * from "./environments";

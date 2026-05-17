@@ -155,12 +155,6 @@
     background: rgba(15, 23, 42, 0.55);
 }
 
-.tool-row--bulk {
-    border-color: rgba(56, 189, 248, 0.35);
-    background: rgba(15, 23, 42, 0.75);
-    margin-bottom: var(--mcp-space-2);
-}
-
 .tool-info {
     display: flex;
     flex-direction: column;

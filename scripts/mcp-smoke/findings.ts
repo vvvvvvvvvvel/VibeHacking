@@ -43,15 +43,66 @@ export const runFindings = async (tools: Set<string>) => {
         });
     });
 
+    let createdId: number | null = null;
+
+    await runIfTool("list_findings", async () => {
+        const listRes = await callTool("list_findings", {
+            limit: 10,
+            filter: { reporter: "mcp-smoke" },
+            fields: ["id", "title", "reporter", "request_id"],
+        });
+        const text = getToolText(listRes);
+        const parsed = tryParseJSON<{ items?: Array<any> }>(text);
+        const finding = parsed?.items?.find((item) => item.title === "mcp-smoke");
+        assert(finding?.id, "created finding missing from list_findings");
+        createdId = Number(finding.id);
+
+        const withHttpRes = await callTool("list_findings", {
+            limit: 1,
+            filter: { reporter: "mcp-smoke" },
+            include_http: true,
+            serialization: {
+                regex_excerpt: { regex: "FW-FB-TOKEN|Bearer|token", context_chars: 8 },
+            },
+            fields: [
+                "id",
+                "http.id",
+                "http.request.url",
+                "http.request.body",
+                "http.response.raw",
+                "http.match_context.excerpts",
+            ],
+        });
+        const withHttpText = getToolText(withHttpRes);
+        const withHttp = tryParseJSON<{ items?: Array<any> }>(withHttpText);
+        assert(withHttp?.items?.[0]?.http?.id, "list_findings include_http missing http item");
+        assert(
+            withHttp?.items?.[0]?.http?.request?.body === undefined,
+            "list_findings should ignore conflicting HTTP request body field",
+        );
+        assert(
+            withHttp?.items?.[0]?.http?.response?.raw === undefined,
+            "list_findings should ignore conflicting HTTP response raw field",
+        );
+    });
+
     await runIfTool("get_finding", async () => {
-        await callTool("get_finding", { request_ids: [requestIdNum], reporter: "mcp-smoke" });
+        const byRequest = await callTool("get_finding", {
+            request_ids: [requestIdNum],
+            reporter: "mcp-smoke",
+        });
+        if (createdId === null) {
+            const text = getToolText(byRequest);
+            const parsed = tryParseJSON<Array<any>>(text);
+            createdId = parsed?.[0]?.id ? Number(parsed[0].id) : null;
+        }
+        assert(createdId !== null, "finding id missing for get_finding ids lookup");
+        await callTool("get_finding", { ids: [createdId] });
     });
 
     await runIfTool("finding_exists", async () => {
         await callTool("finding_exists", { request_ids: [requestIdNum], reporter: "mcp-smoke" });
     });
-
-    let createdId: number | null = null;
 
     await runIfTool("update_finding", async () => {
         const listRes = await callTool("get_finding", {

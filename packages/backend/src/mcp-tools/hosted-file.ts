@@ -30,7 +30,7 @@ export const registerHostedFileTools = ({ server, sdk, store, permissions }: Too
         action: "sdk.hostedFile.getAll",
         group: ToolGroupId.HostedFileSafe,
         toolName: "get_hosted_file",
-        description: "List files from the Files section. Example: {}.",
+        description: "List files from the Files section.",
         inputSchema: hostedFileGetAllSchema,
         handler: async () => {
             const files = await sdk.hostedFile.getAll();
@@ -79,7 +79,7 @@ export const registerHostedFileTools = ({ server, sdk, store, permissions }: Too
         action: "sdk.hostedFile.delete",
         group: ToolGroupId.HostedFileUnsafe,
         toolName: "delete_hosted_file",
-        description: 'Delete a file from the Files section by ID. Example: { "id": 1 }.',
+        description: "Delete a file from the Files section by ID.",
         inputSchema: hostedFileDeleteSchema,
         handler: async (params) => {
             const response = await sdk.graphql.execute<unknown>(

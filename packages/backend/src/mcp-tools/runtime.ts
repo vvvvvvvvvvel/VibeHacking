@@ -11,7 +11,7 @@ export const registerRuntimeTools = ({ server, sdk, store, permissions }: ToolCo
         action: "sdk.runtime.version",
         group: ToolGroupId.RuntimeSafe,
         toolName: "version",
-        description: "Get the current Caido version. Example: {}.",
+        description: "Get the current Caido version.",
         inputSchema: versionSchema,
         handler: () => {
             return {

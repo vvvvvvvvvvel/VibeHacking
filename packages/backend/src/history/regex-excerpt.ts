@@ -43,12 +43,23 @@ const excerpt = (text: string, matchIndex: number, matchLength: number, contextC
     return `${prefix}${text.slice(start, end)}${suffix}`;
 };
 
+const bodyRawPairs = new Map([
+    ["request.raw.text", "request.body.text"],
+    ["response.raw.text", "response.body.text"],
+]);
+
+const bodyRawDuplicateKey = (path: string, text: string) => {
+    const bodyPath = bodyRawPairs.get(path) ?? path;
+    return `${bodyPath}\0${text}`;
+};
+
 export const buildMatchContext = (
     sources: Array<{ path: string; text?: string }>,
     config: RegexExcerptConfig | undefined,
 ): MatchContext | undefined => {
     if (config === undefined) return undefined;
     const excerpts = [];
+    const bodyRawExcerptKeys = new Set<string>();
     for (const source of sources) {
         if (source.text === undefined || source.text === null || source.text === "") continue;
         const flags = config.pattern.flags.includes("g")
@@ -58,10 +69,18 @@ export const buildMatchContext = (
         let match = pattern.exec(source.text);
         while (match?.index !== undefined) {
             const matchLength = match[0]?.length ?? 0;
+            const text = excerpt(source.text, match.index, matchLength, config.contextChars);
+            const duplicateKey = bodyRawDuplicateKey(source.path, text);
+            if (bodyRawPairs.has(source.path) && bodyRawExcerptKeys.has(duplicateKey)) {
+                if (matchLength === 0) pattern.lastIndex += 1;
+                match = pattern.exec(source.text);
+                continue;
+            }
             excerpts.push({
                 path: source.path,
-                text: excerpt(source.text, match.index, matchLength, config.contextChars),
+                text,
             });
+            bodyRawExcerptKeys.add(duplicateKey);
             if (matchLength === 0) pattern.lastIndex += 1;
             match = pattern.exec(source.text);
         }

@@ -17,7 +17,9 @@ export const runTamper = async (tools: Set<string>) => {
             tamper_rule_collections?: Array<any>;
         }>(listText);
         const nodes =
-            listJson?.data?.tamper_rule_collections?.nodes ?? listJson?.tamper_rule_collections ?? [];
+            listJson?.data?.tamper_rule_collections?.nodes ??
+            listJson?.tamper_rule_collections ??
+            [];
         const collectionA = nodes.find((n) => n?.name === nameA);
         const collectionB = nodes.find((n) => n?.name === nameB);
         assert(collectionA?.id, "tamper collection A not found after create");

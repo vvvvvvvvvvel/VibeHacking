@@ -5,32 +5,39 @@ let stopConfirmEvent: (() => void) | undefined;
 
 export const registerConfirmDialog = (sdk: FrontendSDK) => {
     if (stopConfirmEvent !== undefined) return;
-    const subscription = sdk.backend.onEvent("vibe-hacking:confirm-action", (action, details, id) => {
-        showQDialog(sdk, {
-            title: "Confirm action",
-            kicker: "MCP",
-            message: action,
-            detailsTitle: "Details",
-            details,
-            okText: "OK",
-            cancelText: "Cancel",
-            showCancel: true,
-            closeOnMask: false,
-            onOk: () => {
-                void sdk.backend.confirmAction(Number(id), true).catch((err) => {
-                    sdk.window.showToast(`Failed to confirm action.\n${err}`, {
-                        variant: "error",
-                    });
-                });
-            },
-            onCancel: () => {
-                void sdk.backend.confirmAction(Number(id), false).catch((err) => {
-                    sdk.window.showToast(`Failed to cancel action.\n${err}`, {
-                        variant: "error",
-                    });
-                });
-            },
-        });
-    });
+    const subscription = sdk.backend.onEvent(
+        "vibe-hacking:tool-action-confirmation-requested",
+        (action, details, id) => {
+            showQDialog(sdk, {
+                title: "Confirm action",
+                kicker: "MCP",
+                message: action,
+                detailsTitle: "Details",
+                details,
+                okText: "OK",
+                cancelText: "Cancel",
+                showCancel: true,
+                closeOnMask: false,
+                onOk: () => {
+                    void sdk.backend
+                        .resolveToolActionConfirmation(Number(id), true)
+                        .catch((err) => {
+                            sdk.window.showToast(`Failed to confirm action.\n${err}`, {
+                                variant: "error",
+                            });
+                        });
+                },
+                onCancel: () => {
+                    void sdk.backend
+                        .resolveToolActionConfirmation(Number(id), false)
+                        .catch((err) => {
+                            sdk.window.showToast(`Failed to cancel action.\n${err}`, {
+                                variant: "error",
+                            });
+                        });
+                },
+            });
+        },
+    );
     stopConfirmEvent = subscription.stop;
 };

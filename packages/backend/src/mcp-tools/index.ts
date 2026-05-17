@@ -16,6 +16,7 @@ import { registerReplayTools } from "./replay";
 import { registerRequestTools } from "./requests";
 import { registerRuntimeTools } from "./runtime";
 import { registerScopeTools } from "./scope";
+import { registerSitemapTools } from "./sitemap";
 import { registerTamperTools } from "./tamper";
 import { registerWebsocketTools } from "./websocket";
 
@@ -35,6 +36,7 @@ export function registerMcpTools(
     registerHostedFileTools(ctx);
     registerFindingsTools(ctx);
     registerRequestTools(ctx);
+    registerSitemapTools(ctx);
     registerConsoleTools(ctx);
     registerRuntimeTools(ctx);
     registerReplayTools(ctx);

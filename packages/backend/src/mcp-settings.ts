@@ -54,17 +54,18 @@ export class McpSettingsStore {
         return this.state.port;
     }
 
-    getSettings(endpointPath: string): McpSettings {
+    getMcpServerSettings(endpointPath: string, controlEndpointPath: string): McpSettings {
         const displayHost = this.state.host === "0.0.0.0" ? "127.0.0.1" : this.state.host;
         return {
             enabled: this.state.enabled,
             host: this.state.host,
             port: this.state.port,
             url: `http://${displayHost}:${this.state.port}${endpointPath}`,
+            controlUrl: `http://127.0.0.1:${this.state.port}${controlEndpointPath}`,
         };
     }
 
-    setEnabled(enabled: boolean) {
+    setMcpServerEnabled(enabled: boolean) {
         this.state = { ...this.state, enabled };
     }
 
@@ -75,7 +76,7 @@ export class McpSettingsStore {
         this.state = { ...this.state, ...validated };
     }
 
-    setConfig(input: { host: string; port: number }) {
+    updateMcpServerConfig(input: { host: string; port: number }) {
         const { host, port } = this.validateConfig(input);
         this.state = { ...this.state, host, port };
     }
@@ -83,16 +84,27 @@ export class McpSettingsStore {
     async load(): Promise<SettingsSnapshot | undefined> {
         try {
             const raw = await readFile(this.settingsPath, { encoding: "utf8" });
-            const parsed = settingsSchema.safeParse(JSON.parse(String(raw)));
+            const data = JSON.parse(String(raw)) as unknown;
+            const parsed = settingsSchema.safeParse(data);
             if (!parsed.success) {
                 return undefined;
             }
+            const hasLegacyControlToken =
+                data !== null &&
+                typeof data === "object" &&
+                !Array.isArray(data) &&
+                "controlToken" in data;
             const { enabled, host, port } = parsed.data;
-            return {
+            const snapshot = {
                 enabled: enabled ?? this.state.enabled,
                 host: host ?? this.state.host,
                 port: port ?? this.state.port,
             };
+            if (hasLegacyControlToken) {
+                this.state = snapshot;
+                await this.save();
+            }
+            return snapshot;
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             if (message.includes("no such file") || message.includes("ENOENT")) {

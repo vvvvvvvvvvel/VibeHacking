@@ -166,6 +166,7 @@ const listStreamsSchema = z
     .object({
         ...cursorPaginationSchema.shape,
         protocol: z.enum(["WS", "SSE"]).default("WS"),
+        stream_direction: z.enum(["BOTH", "CLIENT", "SERVER"]).optional(),
         scope_id: idSchema.nullable().default(null),
         order: wsOrderSchema,
     })
@@ -286,6 +287,9 @@ const pageInfo = (connection?: { pageInfo?: StreamConnection["pageInfo"] }) => (
     endCursor: connection?.pageInfo?.endCursor ?? null,
 });
 
+const countValue = (connection?: { count?: { value?: number }; edges?: unknown[] }) =>
+    connection?.count?.value ?? connection?.edges?.length ?? 0;
+
 const queryWebSocketStreams = async (
     sdk: ToolContext["sdk"],
     input: z.infer<typeof listStreamsSchema>,
@@ -304,12 +308,17 @@ const queryWebSocketStreams = async (
     return {
         pageInfo: pageInfo(connection),
         snapshot: connection?.snapshot,
-        count: connection?.count,
+        count: countValue(connection),
         items: edges
             .map((edge) => {
                 const stream = normalizeStream(edge.node);
                 return stream === undefined ? null : { cursor: edge.cursor, ...stream };
             })
+            .filter((item) =>
+                item === null || input.stream_direction === undefined
+                    ? true
+                    : item.direction === input.stream_direction,
+            )
             .filter((item) => item !== null),
     };
 };
@@ -343,7 +352,7 @@ const queryWebSocketMessages = async (
     return {
         pageInfo: pageInfo(connection),
         snapshot: connection?.snapshot,
-        count: connection?.count,
+        count: countValue(connection),
         items: applyProjectionToResults(items, projection),
     };
 };
@@ -354,8 +363,8 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
         group: ToolGroupId.WsSafe,
         toolName: "list_websocket_streams",
         description:
-            "List WebSocket/SSE streams with native cursor pagination. " +
-            'Example: { "limit": 50, "protocol": "WS" }.',
+            "List WebSocket/SSE streams with native cursor pagination and optional stream direction filtering. " +
+            'Example: { "limit": 50, "protocol": "WS", "stream_direction": "BOTH" }.',
         inputSchema: listStreamsSchema,
         handler: async (params) => {
             const input = listStreamsSchema.parse(params);
@@ -368,7 +377,7 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
         action: "sdk.websocket.getStreamsByIds",
         group: ToolGroupId.WsSafe,
         toolName: "get_websocket_streams_by_ids",
-        description: 'Fetch exact WebSocket/SSE streams by ID. Example: { "ids": [1] }.',
+        description: "Fetch exact WebSocket/SSE streams by ID.",
         inputSchema: getStreamsSchema,
         handler: async (params) => {
             const { ids } = getStreamsSchema.parse(params);

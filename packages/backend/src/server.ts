@@ -15,7 +15,17 @@ export type HandlerResult = {
     onSocket?: (socket: net.Socket) => void;
 };
 
-export type HttpHandler = (request: Request) => Promise<Response | HandlerResult>;
+export type HttpRequestContext = {
+    remoteAddress?: string;
+    remotePort?: number;
+    localAddress?: string;
+    localPort?: number;
+};
+
+export type HttpHandler = (
+    request: Request,
+    context: HttpRequestContext,
+) => Promise<Response | HandlerResult>;
 
 type ServerOptions = {
     host: string;
@@ -200,7 +210,9 @@ async function writeResponse(socket: net.Socket, response: Response, keepOpen: b
             const chunk: unknown = value;
             if (chunk === undefined) continue;
             if (ArrayBuffer.isView(chunk)) {
-                socket.write(Buffer.from(chunk.buffer));
+                socket.write(
+                    Buffer.from(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength)),
+                );
                 continue;
             }
             if (chunk instanceof ArrayBuffer) {
@@ -237,7 +249,6 @@ async function writeResponse(socket: net.Socket, response: Response, keepOpen: b
                 continue;
             }
             if (
-                typeof chunk === "string" ||
                 typeof chunk === "number" ||
                 typeof chunk === "boolean" ||
                 typeof chunk === "bigint"
@@ -315,24 +326,24 @@ export function createHttpServer({ host, port, handler, listen = true }: ServerO
                     const reqKeepAlive = shouldKeepAliveByRequest(parsed.request);
 
                     try {
-                        const result = await handler(parsed.request);
+                        const result = await handler(parsed.request, {
+                            remoteAddress: socket.remoteAddress,
+                            remotePort: socket.remotePort,
+                            localAddress: socket.localAddress,
+                            localPort: socket.localPort,
+                        });
 
-                        if (isHandlerResult(result)) {
-                            const r = result;
-                            const keepOpen =
-                                typeof r.keepOpen === "boolean" ? r.keepOpen : reqKeepAlive;
-                            if (keepOpen && r.onSocket) r.onSocket(socket);
-                            await writeResponse(socket, r.response, keepOpen);
-                            if (!keepOpen) return;
-                        } else {
-                            {
-                                const keepOpen = reqKeepAlive;
-                                {
-                                    await writeResponse(socket, result, keepOpen);
-                                    if (!keepOpen) return;
-                                }
-                            }
-                        }
+                        const responseResult = isHandlerResult(result)
+                            ? result
+                            : { response: result };
+                        const keepOpen =
+                            typeof responseResult.keepOpen === "boolean"
+                                ? responseResult.keepOpen
+                                : reqKeepAlive;
+
+                        if (keepOpen) responseResult.onSocket?.(socket);
+                        await writeResponse(socket, responseResult.response, keepOpen);
+                        if (!keepOpen) return;
                     } catch {
                         const resp = new Response(new Blob(["Internal Server Error"]), {
                             status: 500,

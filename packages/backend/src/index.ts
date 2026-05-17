@@ -5,32 +5,43 @@ export type { BackendEvents } from "./types/events";
 
 export function init(sdk: MCPSDK) {
     const mcp = new McpHttpServer(sdk);
-    sdk.api.register("initialize", async () => {
-        return await mcp.initialize();
+    sdk.api.register("initializeMcpServer", async () => {
+        return await mcp.initializeMcpServer();
     });
-    sdk.api.register("getSettings", () => {
-        return mcp.getSettings();
+    sdk.api.register("getMcpServerSettings", () => {
+        return mcp.getMcpServerSettings();
     });
-    sdk.api.register("setEnabled", async (_sdk: MCPSDK, enabled: boolean) => {
-        return await mcp.setEnabled(enabled);
-    });
-    sdk.api.register("setConfig", async (_sdk: MCPSDK, config: { host: string; port: number }) => {
-        return await mcp.setConfig(config);
-    });
-    sdk.api.register("testLog", () => {});
-    sdk.api.register("getToolPermissions", () => {
-        return mcp.getToolPermissions();
+    sdk.api.register("setMcpServerEnabled", async (_sdk: MCPSDK, enabled: boolean) => {
+        return await mcp.setMcpServerEnabled(enabled);
     });
     sdk.api.register(
-        "setToolGroupMode",
-        async (_sdk: MCPSDK, groupId: string, mode: "auto" | "confirm" | "disabled") => {
-            return await mcp.setToolGroupMode(groupId, mode);
+        "updateMcpServerConfig",
+        async (_sdk: MCPSDK, config: { host: string; port: number }) => {
+            return await mcp.updateMcpServerConfig(config);
         },
     );
-    sdk.api.register("confirmAction", async (_sdk: MCPSDK, id: number, confirmed: boolean) => {
-        const resolved = await mcp.resolvePendingAction(Number(id), confirmed);
-        return resolved !== null;
+    sdk.api.register("getToolGroupPermissionModes", () => {
+        return mcp.getToolGroupPermissionModes();
     });
+    sdk.api.register(
+        "setToolGroupPermissionMode",
+        async (_sdk: MCPSDK, groupId: string, mode: "auto" | "confirm" | "disabled") => {
+            return await mcp.setToolGroupPermissionMode(groupId, mode);
+        },
+    );
+    sdk.api.register(
+        "setAllToolGroupPermissionModes",
+        async (_sdk: MCPSDK, mode: "auto" | "confirm" | "disabled") => {
+            return await mcp.setAllToolGroupPermissionModes(mode);
+        },
+    );
+    sdk.api.register(
+        "resolveToolActionConfirmation",
+        async (_sdk: MCPSDK, id: number, confirmed: boolean) => {
+            const resolved = await mcp.resolveToolActionConfirmation(Number(id), confirmed);
+            return resolved !== null;
+        },
+    );
 }
 
 void init;

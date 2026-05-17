@@ -197,9 +197,14 @@ const includePath = (
         return;
     }
     if (Array.isArray(value)) {
-        target[head] = value.map((item) => {
+        const existingItems = Array.isArray(target[head]) ? target[head] : [];
+        target[head] = value.map((item, index) => {
             if (item === null || typeof item !== "object" || Array.isArray(item)) return item;
-            const nested: Record<string, unknown> = {};
+            const existing = existingItems[index];
+            const nested =
+                existing !== null && typeof existing === "object" && !Array.isArray(existing)
+                    ? { ...(existing as Record<string, unknown>) }
+                    : {};
             includePath(item as Record<string, unknown>, nested, tail);
             return nested;
         });
@@ -305,17 +310,26 @@ const optimizeDefaultHttpShape = (item: unknown): unknown => {
     return out;
 };
 
-export const validateRegexExcerptProjection = (
+const regexExcerptIgnoredFieldPrefixes = [
+    "request.body",
+    "response.body",
+    "request.raw",
+    "response.raw",
+];
+
+const isRegexExcerptIgnoredField = (path: string) =>
+    regexExcerptIgnoredFieldPrefixes.some(
+        (prefix) => path === prefix || path.startsWith(`${prefix}.`),
+    );
+
+export const normalizeRegexExcerptProjection = (
     regexExcerptEnabled: boolean,
     projection: FieldProjection | undefined,
-) => {
-    if (!regexExcerptEnabled || projection?.fields === undefined) return;
-    const forbidden = ["request.body", "response.body", "request.raw", "response.raw"];
-    for (const path of projection.fields) {
-        if (forbidden.some((prefix) => path === prefix || path.startsWith(`${prefix}.`))) {
-            throw new Error(
-                "request/response body and raw fields cannot be requested when regex_excerpt is enabled",
-            );
-        }
-    }
+): FieldProjection | undefined => {
+    if (!regexExcerptEnabled || projection?.fields === undefined) return projection;
+    return {
+        fields: new Set(
+            Array.from(projection.fields).filter((path) => !isRegexExcerptIgnoredField(path)),
+        ),
+    };
 };

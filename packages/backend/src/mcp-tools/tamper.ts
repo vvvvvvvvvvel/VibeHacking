@@ -304,7 +304,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.listCollections",
         group: ToolGroupId.TamperSafe,
         toolName: "list_tamper_rule_collections",
-        description: "List Tamper rule collections with their rules. Example: {}.",
+        description: "List Tamper rule collections with their rules.",
         inputSchema: emptySchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
@@ -325,7 +325,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.getCollection",
         group: ToolGroupId.TamperSafe,
         toolName: "get_tamper_rule_collection",
-        description: 'Get Tamper rule collections by ID. Example: { "ids": [1] }.',
+        description: "Get Tamper rule collections by ID.",
         inputSchema: getCollectionSchema,
         handler: async (params) => {
             const { ids } = getCollectionSchema.parse(params);
@@ -348,8 +348,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         group: ToolGroupId.TamperSafe,
         toolName: "list_tamper_rules",
         description:
-            "List Tamper rule collections with their rules (same as list_tamper_rule_collections). " +
-            "Example: {}.",
+            "List Tamper rule collections with their rules (same as list_tamper_rule_collections).",
         inputSchema: emptySchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
@@ -370,7 +369,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.getRule",
         group: ToolGroupId.TamperSafe,
         toolName: "get_tamper_rule",
-        description: 'Get Tamper rules by ID. Example: { "ids": [1] }.',
+        description: "Get Tamper rules by ID.",
         inputSchema: getRuleSchema,
         handler: async (params) => {
             const { ids } = getRuleSchema.parse(params);
@@ -390,7 +389,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.createCollection",
         group: ToolGroupId.TamperSafe,
         toolName: "create_tamper_rule_collection",
-        description: 'Create Tamper rule collections. Example: { "items": ["My Rules"] }.',
+        description: "Create Tamper rule collections.",
         inputSchema: createCollectionSchema,
         handler: async (params) => {
             const { items } = createCollectionSchema.parse(params);
@@ -413,8 +412,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.renameCollection",
         group: ToolGroupId.TamperSafe,
         toolName: "rename_tamper_rule_collection",
-        description:
-            'Rename Tamper rule collections. Example: { "items": [{ "id": 1, "name": "Renamed" }] }.',
+        description: "Rename Tamper rule collections.",
         inputSchema: renameCollectionSchema,
         handler: async (params) => {
             const { items } = renameCollectionSchema.parse(params);
@@ -437,7 +435,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.deleteCollection",
         group: ToolGroupId.TamperUnsafe,
         toolName: "delete_tamper_rule_collection",
-        description: 'Delete Tamper rule collections by ID. Example: { "ids": [1] }.',
+        description: "Delete Tamper rule collections by ID.",
         inputSchema: deleteCollectionSchema,
         handler: async (params) => {
             const { ids } = deleteCollectionSchema.parse(params);
@@ -542,7 +540,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.renameRule",
         group: ToolGroupId.TamperSafe,
         toolName: "rename_tamper_rule",
-        description: 'Rename Tamper rules. Example: { "items": [{ "id": 1, "name": "Renamed" }] }.',
+        description: "Rename Tamper rules.",
         inputSchema: renameRuleSchema,
         handler: async (params) => {
             const { items } = renameRuleSchema.parse(params);
@@ -562,7 +560,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.deleteRule",
         group: ToolGroupId.TamperUnsafe,
         toolName: "delete_tamper_rule",
-        description: 'Delete Tamper rules by ID. Example: { "rule_ids": [1] }.',
+        description: "Delete Tamper rules by ID.",
         inputSchema: deleteRuleSchema,
         handler: async (params) => {
             const { rule_ids } = deleteRuleSchema.parse(params);
@@ -582,8 +580,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.toggleRule",
         group: ToolGroupId.TamperSafe,
         toolName: "toggle_tamper_rule",
-        description:
-            'Enable or disable Tamper rules. Example: { "rule_ids": [1], "enabled": true }.',
+        description: "Enable or disable Tamper rules.",
         inputSchema: toggleRuleSchema,
         handler: async (params) => {
             const { rule_ids, enabled } = toggleRuleSchema.parse(params);
@@ -606,8 +603,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.moveRule",
         group: ToolGroupId.TamperSafe,
         toolName: "move_tamper_rule",
-        description:
-            'Move Tamper rules to another collection. Example: { "rule_ids": [1], "collection_id": 2 }.',
+        description: "Move Tamper rules to another collection.",
         inputSchema: moveRuleSchema,
         handler: async (params) => {
             const { rule_ids, collection_id } = moveRuleSchema.parse(params);
@@ -630,7 +626,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.rankRule",
         group: ToolGroupId.TamperSafe,
         toolName: "rank_tamper_rule",
-        description: 'Reorder a Tamper rule. Example: { "id": 2, "input": { "after_id": 1 } }.',
+        description: "Reorder a Tamper rule with before_id or after_id.",
         inputSchema: z
             .object({
                 id: idSchema,
@@ -688,9 +684,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         action: "sdk.tamper.export",
         group: ToolGroupId.TamperSafe,
         toolName: "export_tamper",
-        description:
-            "Export Tamper configuration. Provide collections or rules (IDs). " +
-            'Example: { "collections": [1] }.',
+        description: "Export Tamper configuration. Provide collections or rules (IDs).",
         inputSchema: z
             .object({
                 collections: z.array(idSchema).min(1).optional(),
