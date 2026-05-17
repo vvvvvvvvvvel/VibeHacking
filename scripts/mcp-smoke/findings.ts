@@ -3,10 +3,13 @@ import { assert, getToolText, logStep, makeToolCaller, tryParseJSON } from "./_u
 const pickFirstRequestId = async (
     callTool: (n: string, a: Record<string, unknown>) => Promise<unknown>,
 ) => {
-    const res = await callTool("query-requests", { limit: 1 });
+    const res = await callTool("list_requests", {
+        limit: 1,
+        fields: ["id"],
+    });
     const text = getToolText(res);
     const parsed = tryParseJSON<{ items?: Array<any> }>(text);
-    const first = parsed?.items?.[0]?.request?.id ?? parsed?.items?.[0]?.requestId ?? null;
+    const first = parsed?.items?.[0]?.id ?? null;
     return first ? String(first) : null;
 };
 
@@ -18,7 +21,7 @@ export const runFindings = async (tools: Set<string>) => {
     let requestId: string | null = null;
     let requestIdNum: number | null = null;
 
-    await runIfTool("query-requests", async () => {
+    await runIfTool("list_requests", async () => {
         requestId = await pickFirstRequestId(callTool);
         requestIdNum = requestId ? Number(requestId) : null;
         assert(requestId !== null, "no saved requests found for findings");
@@ -27,32 +30,32 @@ export const runFindings = async (tools: Set<string>) => {
     assert(requestId !== null, "no request id for findings");
     assert(requestIdNum !== null, "no numeric request id for findings");
 
-    await runIfTool("create-finding", async () => {
-        await callTool("create-finding", {
+    await runIfTool("create_finding", async () => {
+        await callTool("create_finding", {
             items: [
                 {
                     title: "mcp-smoke",
                     reporter: "mcp-smoke",
-                    requestId: requestIdNum,
+                    request_id: requestIdNum,
                     description: "smoke",
                 },
             ],
         });
     });
 
-    await runIfTool("get-finding", async () => {
-        await callTool("get-finding", { requestIds: [requestIdNum], reporter: "mcp-smoke" });
+    await runIfTool("get_finding", async () => {
+        await callTool("get_finding", { request_ids: [requestIdNum], reporter: "mcp-smoke" });
     });
 
-    await runIfTool("finding-exists", async () => {
-        await callTool("finding-exists", { requestIds: [requestIdNum], reporter: "mcp-smoke" });
+    await runIfTool("finding_exists", async () => {
+        await callTool("finding_exists", { request_ids: [requestIdNum], reporter: "mcp-smoke" });
     });
 
     let createdId: number | null = null;
 
-    await runIfTool("update-finding", async () => {
-        const listRes = await callTool("get-finding", {
-            requestIds: [requestIdNum],
+    await runIfTool("update_finding", async () => {
+        const listRes = await callTool("get_finding", {
+            request_ids: [requestIdNum],
             reporter: "mcp-smoke",
         });
         const text = getToolText(listRes);
@@ -60,26 +63,26 @@ export const runFindings = async (tools: Set<string>) => {
         const found = parsed?.[0]?.id;
         assert(found, "finding id missing");
         createdId = Number(found);
-        await callTool("update-finding", {
+        await callTool("update_finding", {
             items: [{ id: Number(found), input: { title: "mcp-smoke-updated" } }],
         });
     });
 
-    await runIfTool("delete-finding", async () => {
+    await runIfTool("delete_finding", async () => {
         if (!createdId) {
-            const listRes = await callTool("get-finding", {
-                requestIds: [requestIdNum],
+            const listRes = await callTool("get_finding", {
+                request_ids: [requestIdNum],
                 reporter: "mcp-smoke",
             });
             const text = getToolText(listRes);
             const parsed = tryParseJSON<Array<any>>(text);
             createdId = parsed?.[0]?.id ? Number(parsed[0].id) : null;
         }
-        assert(createdId, "finding id missing for delete");
-        await callTool("delete-finding", { ids: [createdId] });
+        assert(createdId !== null, "finding id missing for delete");
+        await callTool("delete_finding", { ids: [createdId] });
 
-        const verifyRes = await callTool("get-finding", {
-            requestIds: [requestId],
+        const verifyRes = await callTool("get_finding", {
+            request_ids: [requestId],
             reporter: "mcp-smoke",
         });
         const verifyText = getToolText(verifyRes);

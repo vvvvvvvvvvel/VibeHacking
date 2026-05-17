@@ -23,8 +23,8 @@ export enum ToolGroupId {
     RuntimeSafe = "runtime-safe",
     ScopeSafe = "scope-safe",
     ScopeUnsafe = "scope-unsafe",
-    TemperSafe = "temper-safe",
-    TemperUnsafe = "temper-unsafe",
+    TamperSafe = "tamper-safe",
+    TamperUnsafe = "tamper-unsafe",
     WsSafe = "ws-safe",
     HelpSafe = "help-safe",
 }
@@ -60,13 +60,13 @@ const BASE_GROUPS: ToolGroupSeed[] = [
     { id: ToolGroupId.ScopeSafe, label: "Scope safe", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.ScopeUnsafe, label: "Scope unsafe", tools: [], defaultMode: "confirm" },
     {
-        id: ToolGroupId.TemperSafe,
+        id: ToolGroupId.TamperSafe,
         label: "Tamper (Match & Replace) safe",
         tools: [],
         defaultMode: "auto",
     },
     {
-        id: ToolGroupId.TemperUnsafe,
+        id: ToolGroupId.TamperUnsafe,
         label: "Tamper (Match & Replace) unsafe",
         tools: [],
         defaultMode: "confirm",
@@ -78,33 +78,77 @@ const BASE_GROUPS: ToolGroupSeed[] = [
 const DEFAULT_MODE: ToolGroupMode = "confirm";
 const HIDDEN_GROUP_IDS = new Set<string>([ToolGroupId.HelpSafe]);
 
+const createBaseGroups = (): ToolGroup[] =>
+    BASE_GROUPS.map(({ id, label, tools }) => ({
+        id,
+        label,
+        tools: tools.map((tool) => ({ ...tool })),
+    }));
+
+const createDefaultStates = (): Record<string, ToolGroupMode> =>
+    Object.fromEntries(BASE_GROUPS.map((group) => [group.id, group.defaultMode ?? DEFAULT_MODE]));
+
+const groupIds = new Set<string>(BASE_GROUPS.map((group) => group.id));
+
+const LEGACY_GROUP_ID_MIGRATIONS: Record<string, ToolGroupId> = {
+    "temper-safe": ToolGroupId.TamperSafe,
+    "temper-unsafe": ToolGroupId.TamperUnsafe,
+};
+
+const isToolGroupMode = (value: unknown): value is ToolGroupMode =>
+    value === "auto" || value === "confirm" || value === "disabled";
+
+const hasValidState = (states: Record<string, unknown>, groupId: string) =>
+    isToolGroupMode(states[groupId]);
+
+const mergeKnownStates = (
+    states: unknown,
+): { states: Record<string, ToolGroupMode>; migrated: boolean } => {
+    const next = createDefaultStates();
+    if (states === null || typeof states !== "object" || Array.isArray(states)) {
+        return { states: next, migrated: false };
+    }
+    const input = states as Record<string, unknown>;
+    let migrated = false;
+    for (const [groupId, mode] of Object.entries(input)) {
+        if (groupIds.has(groupId) && isToolGroupMode(mode)) {
+            next[groupId] = mode;
+        }
+    }
+    for (const [groupId, mode] of Object.entries(input)) {
+        const migratedGroupId = LEGACY_GROUP_ID_MIGRATIONS[groupId];
+        if (migratedGroupId === undefined) continue;
+        migrated = true;
+        if (!isToolGroupMode(mode)) continue;
+        if (!hasValidState(input, migratedGroupId)) {
+            next[migratedGroupId] = mode;
+        }
+    }
+    return { states: next, migrated };
+};
+
 export class ToolPermissionsStore {
     private readonly sdk: MCPSDK;
     private readonly permissionsPath: string;
     private persistQueue: Promise<void> = Promise.resolve();
-    private groups: ToolGroup[] = BASE_GROUPS;
-    private states: Record<string, ToolGroupMode> = {};
+    private groups: ToolGroup[] = createBaseGroups();
+    private states: Record<string, ToolGroupMode> = createDefaultStates();
     private actionToGroup: Record<string, ToolGroupId> = {};
 
     constructor(sdk: MCPSDK) {
         this.sdk = sdk;
         this.permissionsPath = join(this.sdk.meta.path(), "tool-permissions.json");
-        for (const group of BASE_GROUPS) {
-            this.states[group.id] = group.defaultMode ?? DEFAULT_MODE;
-        }
     }
 
     async load(): Promise<void> {
         try {
             const raw = await readFile(this.permissionsPath, { encoding: "utf8" });
             const parsed = JSON.parse(String(raw)) as ToolPermissions;
-            this.groups = BASE_GROUPS.map((group) => ({
-                id: group.id,
-                label: group.label,
-                tools: Array.from(new Map(group.tools.map((tool) => [tool.action, tool])).values()),
-            }));
-            if (parsed !== undefined && parsed.states !== undefined) {
-                this.states = { ...this.states, ...parsed.states };
+            this.groups = createBaseGroups();
+            const merged = mergeKnownStates(parsed?.states);
+            this.states = merged.states;
+            if (merged.migrated) {
+                await this.save();
             }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -142,6 +186,12 @@ export class ToolPermissionsStore {
     }
 
     async setGroupMode(groupId: string, mode: ToolGroupMode): Promise<ToolPermissions> {
+        if (!groupIds.has(groupId)) {
+            throw new Error(`Unknown tool group: ${groupId}`);
+        }
+        if (!isToolGroupMode(mode)) {
+            throw new Error(`Invalid tool group mode: ${String(mode)}`);
+        }
         if (HIDDEN_GROUP_IDS.has(groupId)) {
             this.states = { ...this.states, [groupId]: "auto" };
             return this.getPermissions();

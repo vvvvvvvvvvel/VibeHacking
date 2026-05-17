@@ -3,7 +3,7 @@ import type { Socket } from "net";
 
 import { McpServer, type RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { Blob, Headers, Request as CaidoRequest, Response as CaidoResponse } from "caido:http";
+import { Blob, Request as CaidoRequest, Response as CaidoResponse, Headers } from "caido:http";
 import { MCP_PLUGIN_VERSION } from "shared";
 
 import type { ConfirmActionStore } from "./confirm-actions";

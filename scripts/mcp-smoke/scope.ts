@@ -5,12 +5,12 @@ export const runScope = async (tools: Set<string>) => {
 
     logStep("Scope");
 
-    await runIfTool("create-scope", async () => {
+    await runIfTool("create_scope", async () => {
         const name = `smoke-${Date.now()}`;
-        await callTool("create-scope", {
+        await callTool("create_scope", {
             items: [{ name, allowlist: ["example.com"], denylist: [] }],
         });
-        const listRes = await callTool("list-scopes", {});
+        const listRes = await callTool("list_scopes", {});
         const listText = getToolText(listRes);
         const listJson = tryParseJSON<{
             data?: { scopes?: { nodes?: Array<any> } };
@@ -20,12 +20,12 @@ export const runScope = async (tools: Set<string>) => {
         const created = nodes.find((n) => n?.name === name);
         assert(created?.id, "scope not found after create");
 
-        await runIfTool("get-scope", async () => {
-            await callTool("get-scope", { ids: [Number(created.id)] });
+        await runIfTool("get_scope", async () => {
+            await callTool("get_scope", { ids: [Number(created.id)] });
         });
 
-        await runIfTool("update-scope", async () => {
-            await callTool("update-scope", {
+        await runIfTool("update_scope", async () => {
+            await callTool("update_scope", {
                 id: Number(created.id),
                 input: {
                     name: `${name}-updated`,
@@ -35,14 +35,14 @@ export const runScope = async (tools: Set<string>) => {
             });
         });
 
-        await runIfTool("rename-scope", async () => {
-            await callTool("rename-scope", {
+        await runIfTool("rename_scope", async () => {
+            await callTool("rename_scope", {
                 items: [{ id: Number(created.id), name: `${name}-renamed` }],
             });
         });
 
-        await runIfTool("delete-scope", async () => {
-            await callTool("delete-scope", { ids: [Number(created.id)] });
+        await runIfTool("delete_scope", async () => {
+            await callTool("delete_scope", { ids: [Number(created.id)] });
         });
     });
 };

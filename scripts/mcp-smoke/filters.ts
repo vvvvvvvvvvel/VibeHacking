@@ -5,28 +5,28 @@ export const runFilters = async (tools: Set<string>) => {
 
     logStep("Filters");
 
-    await runIfTool("create-filter-preset", async () => {
+    await runIfTool("create_filter_preset", async () => {
         const name = `smoke-${Date.now()}`;
         const alias = `smoke_${Date.now()}`;
-        await callTool("create-filter-preset", {
+        await callTool("create_filter_preset", {
             items: [{ name, alias, clause: 'req.method.eq:"GET"' }],
         });
-        const listRes = await callTool("list-filter-presets", {});
+        const listRes = await callTool("list_filter_presets", {});
         const listText = getToolText(listRes);
         const listJson = tryParseJSON<{
-            data?: { filterPresets?: { nodes?: Array<any> } };
-            filterPresets?: Array<any>;
+            data?: { filter_presets?: { nodes?: Array<any> } };
+            filter_presets?: Array<any>;
         }>(listText);
-        const nodes = listJson?.data?.filterPresets?.nodes ?? listJson?.filterPresets ?? [];
+        const nodes = listJson?.data?.filter_presets?.nodes ?? listJson?.filter_presets ?? [];
         const created = nodes.find((n) => n?.name === name && n?.alias === alias);
         assert(created?.id, "filter preset not found after create");
 
-        await runIfTool("get-filter-preset", async () => {
-            await callTool("get-filter-preset", { ids: [Number(created.id)] });
+        await runIfTool("get_filter_preset", async () => {
+            await callTool("get_filter_preset", { ids: [Number(created.id)] });
         });
 
-        await runIfTool("update-filter-preset", async () => {
-            await callTool("update-filter-preset", {
+        await runIfTool("update_filter_preset", async () => {
+            await callTool("update_filter_preset", {
                 id: Number(created.id),
                 input: {
                     name: `${name}-updated`,
@@ -36,8 +36,8 @@ export const runFilters = async (tools: Set<string>) => {
             });
         });
 
-        await runIfTool("delete-filter-preset", async () => {
-            await callTool("delete-filter-preset", { ids: [Number(created.id)] });
+        await runIfTool("delete_filter_preset", async () => {
+            await callTool("delete_filter_preset", { ids: [Number(created.id)] });
         });
     });
 };

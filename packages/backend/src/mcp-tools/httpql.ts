@@ -9,7 +9,7 @@ export const registerHttpqlTools = ({ server, sdk, store, permissions }: ToolCon
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.httpql.help",
         group: ToolGroupId.HelpSafe,
-        toolName: "get-httpql-help",
+        toolName: "get_httpql_help",
         description: "Get a HTTPQL reference. Example: {}.",
         inputSchema: z.object({}).strict(),
         annotations: {

@@ -1,10 +1,22 @@
-export const LIST_FILTER_PRESETS_QUERY = `
-  query filterPresets {
-    filterPresets {
+const FILTER_PRESET_FIELDS = `
       id
       name
       alias
-      clause
+      clause {
+        __typename
+        ... on HTTPQL {
+          code
+        }
+        ... on StreamQL {
+          code
+        }
+      }
+`;
+
+export const LIST_FILTER_PRESETS_QUERY = `
+  query filterPresets {
+    filterPresets {
+${FILTER_PRESET_FIELDS}
     }
   }
 `;
@@ -12,10 +24,7 @@ export const LIST_FILTER_PRESETS_QUERY = `
 export const GET_FILTER_PRESET_QUERY = `
   query filterPreset($id: ID!) {
     filterPreset(id: $id) {
-      id
-      name
-      alias
-      clause
+${FILTER_PRESET_FIELDS}
     }
   }
 `;
@@ -24,10 +33,7 @@ export const CREATE_FILTER_PRESET_MUTATION = `
   mutation createFilterPreset($input: CreateFilterPresetInput!) {
     createFilterPreset(input: $input) {
       filter {
-        id
-        name
-        alias
-        clause
+${FILTER_PRESET_FIELDS}
       }
       error {
         __typename
@@ -59,10 +65,7 @@ export const UPDATE_FILTER_PRESET_MUTATION = `
   mutation updateFilterPreset($id: ID!, $input: UpdateFilterPresetInput!) {
     updateFilterPreset(id: $id, input: $input) {
       filter {
-        id
-        name
-        alias
-        clause
+${FILTER_PRESET_FIELDS}
       }
       error {
         __typename

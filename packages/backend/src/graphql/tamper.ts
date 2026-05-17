@@ -124,6 +124,16 @@ const TAMPER_SECTION_FIELDS = `
   ... on TamperSectionResponseStatusCode { operation { ${TAMPER_OPERATION_STATUS_FIELDS} } }
 `;
 
+const QUERY_FIELDS = `
+  __typename
+  ... on HTTPQL {
+    code
+  }
+  ... on StreamQL {
+    code
+  }
+`;
+
 const TAMPER_RULE_ERROR_FIELDS = `
   __typename
   ... on InvalidRegexUserError { code term }
@@ -148,7 +158,9 @@ export const LIST_TAMPER_RULE_COLLECTIONS_QUERY = `
         enable {
           rank
         }
-        condition
+        condition {
+          ${QUERY_FIELDS}
+        }
         sources
         section {
           ${TAMPER_SECTION_FIELDS}
@@ -169,7 +181,9 @@ export const GET_TAMPER_RULE_COLLECTION_QUERY = `
         enable {
           rank
         }
-        condition
+        condition {
+          ${QUERY_FIELDS}
+        }
         sources
         section {
           ${TAMPER_SECTION_FIELDS}
@@ -187,7 +201,9 @@ export const GET_TAMPER_RULE_QUERY = `
       enable {
         rank
       }
-      condition
+      condition {
+        ${QUERY_FIELDS}
+      }
       sources
       collection {
         id
@@ -239,7 +255,9 @@ export const CREATE_TAMPER_RULE_MUTATION = `
         enable {
           rank
         }
-        condition
+        condition {
+          ${QUERY_FIELDS}
+        }
         sources
         section {
           ${TAMPER_SECTION_FIELDS}
@@ -261,7 +279,9 @@ export const UPDATE_TAMPER_RULE_MUTATION = `
         enable {
           rank
         }
-        condition
+        condition {
+          ${QUERY_FIELDS}
+        }
         sources
         section {
           ${TAMPER_SECTION_FIELDS}
@@ -339,27 +359,6 @@ export const TEST_TAMPER_RULE_MUTATION = `
 `;
 
 export const EXPORT_TAMPER_MUTATION = `
-  mutation exportTamper {
-    exportTamper {
-      export {
-        id
-        downloadUri
-      }
-      error {
-        __typename
-        ... on PermissionDeniedUserError {
-          code
-          permissionDeniedReason: reason
-        }
-        ... on OtherUserError {
-          code
-        }
-      }
-    }
-  }
-`;
-
-export const EXPORT_TAMPER_WITH_TARGET_MUTATION = `
   mutation exportTamper($input: ExportTamperInput!) {
     exportTamper(input: $input) {
       export {
@@ -379,3 +378,5 @@ export const EXPORT_TAMPER_WITH_TARGET_MUTATION = `
     }
   }
 `;
+
+export const EXPORT_TAMPER_WITH_TARGET_MUTATION = EXPORT_TAMPER_MUTATION;

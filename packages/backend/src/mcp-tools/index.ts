@@ -11,7 +11,7 @@ import { registerFindingsTools } from "./findings";
 import { registerHostedFileTools } from "./hosted-file";
 import { registerHttpqlTools } from "./httpql";
 import { registerProjectTools } from "./projects";
-import type { ToolContext } from "./register";
+import { attachToolActionRegistry, type ToolContext } from "./register";
 import { registerReplayTools } from "./replay";
 import { registerRequestTools } from "./requests";
 import { registerRuntimeTools } from "./runtime";
@@ -26,7 +26,8 @@ export function registerMcpTools(
     permissions: ToolPermissionsStore,
 ) {
     const toolsByAction = new Map<string, RegisteredTool>();
-    const ctx: ToolContext = { server, sdk, store, permissions, toolsByAction };
+    attachToolActionRegistry(server, toolsByAction);
+    const ctx: ToolContext = { server, sdk, store, permissions };
 
     registerEnvTools(ctx);
     registerProjectTools(ctx);

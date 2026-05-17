@@ -6,15 +6,30 @@ import {
     GET_STREAM_QUERY,
     GET_STREAM_WS_MESSAGE_EDIT_QUERY,
     GET_STREAM_WS_MESSAGE_QUERY,
-    LIST_STREAM_WS_MESSAGES_BY_OFFSET_QUERY,
     LIST_STREAM_WS_MESSAGES_QUERY,
-    LIST_STREAMS_BY_OFFSET_QUERY,
     LIST_STREAMS_QUERY,
 } from "../graphql";
+import {
+    applyProjectionToLookupResults,
+    applyProjectionToResults,
+    DEFAULT_MAX_BINARY_BODY_BYTES,
+    DEFAULT_MAX_TEXT_PAYLOAD_CHARS,
+    normalizeWebSocketSerialization,
+    resolveFieldProjection,
+    serializeBytes,
+    WS_MESSAGE_FIELD_PATHS,
+} from "../history";
+import type {
+    FieldProjection,
+    SerializedWebSocketMessage,
+    WebSocketSerializationOptions,
+    WebSocketSerializationOptionsInput,
+} from "../history";
 import { ToolGroupId } from "../tool-permissions";
 
 import { registerToolAction, type ToolContext } from "./register";
-import { stringifyResult } from "./shared";
+import { stringifyResult, toNumericId } from "./shared";
+
 type StreamNode = {
     id: string;
     host: string;
@@ -27,11 +42,6 @@ type StreamNode = {
     createdAt: string;
 };
 
-type StreamEdge = {
-    cursor: string;
-    node: StreamNode;
-};
-
 type StreamConnection = {
     pageInfo?: {
         hasPreviousPage: boolean;
@@ -39,22 +49,17 @@ type StreamConnection = {
         startCursor?: string;
         endCursor?: string;
     };
-    edges?: StreamEdge[];
-    nodes?: StreamNode[];
+    edges?: Array<{ cursor: string; node: StreamNode }>;
+    count?: { value?: number };
     snapshot?: string;
-    count?: { value: number };
-};
-
-type StreamResponse = {
-    stream?: StreamNode;
 };
 
 type StreamsResponse = {
     streams?: StreamConnection;
 };
 
-type StreamsByOffsetResponse = {
-    streamsByOffset?: StreamConnection;
+type StreamResponse = {
+    stream?: StreamNode;
 };
 
 type StreamWsMessageEditNode = {
@@ -69,14 +74,9 @@ type StreamWsMessageEditNode = {
 
 type StreamWsMessageNode = {
     id: string;
-    stream?: { id: string };
+    stream?: StreamNode;
     edits?: Array<{ id: string; alteration: string }>;
     head?: StreamWsMessageEditNode;
-};
-
-type StreamWsMessageEdge = {
-    cursor: string;
-    node: StreamWsMessageNode;
 };
 
 type StreamWsMessageConnection = {
@@ -86,278 +86,315 @@ type StreamWsMessageConnection = {
         startCursor?: string;
         endCursor?: string;
     };
-    edges?: StreamWsMessageEdge[];
-    nodes?: StreamWsMessageNode[];
+    edges?: Array<{ cursor: string; node: StreamWsMessageNode }>;
+    count?: { value?: number };
     snapshot?: string;
-    count?: { value: number };
-};
-
-type StreamWsMessageResponse = {
-    streamWsMessage?: StreamWsMessageNode;
 };
 
 type StreamWsMessagesResponse = {
     streamWsMessages?: StreamWsMessageConnection;
 };
 
-type StreamWsMessagesByOffsetResponse = {
-    streamWsMessagesByOffset?: StreamWsMessageConnection;
+type StreamWsMessageResponse = {
+    streamWsMessage?: StreamWsMessageNode;
 };
 
 type StreamWsMessageEditResponse = {
     streamWsMessageEdit?: StreamWsMessageEditNode;
 };
 
-type RawOptions = {
-    includeRaw?: boolean;
-    maxRawBytes?: number;
+type ListWsMessagesInput = {
+    stream_id?: string;
+    cursor?: string;
+    direction?: "after" | "before";
+    order?: { by?: "ID"; ordering?: "ASC" | "DESC" };
+    limit?: number;
+    serialization?: WebSocketSerializationOptionsInput;
+    fields?: string[];
+    exclude_fields?: string[];
 };
 
-type SerializedWsMessageEdit = {
-    id: string;
-    alteration: string;
-    direction: string;
-    format: string;
-    length: number;
-    createdAt: string;
-    raw: string | undefined;
-    rawUtf8?: string;
-    rawBase64?: string;
-    rawEncoding?: "base64" | "omitted";
-};
+const idSchema = z.preprocess(
+    (value) => (typeof value === "number" ? String(value) : value),
+    z.string().min(1),
+);
 
-type SerializedWsMessage = {
-    id: string;
-    streamId?: string;
-    head?: SerializedWsMessageEdit;
-    edits?: Array<{ id: string; alteration: string }>;
-};
+const idArraySchema = z.array(idSchema).min(1);
 
-const DEFAULT_MAX_RAW_BYTES = 256;
-const formatBinaryPlaceholder = (size: number) => `<...binary data ${size} bytes...>`;
+const wsOrderSchema = z
+    .object({
+        by: z.enum(["ID"]).default("ID"),
+        ordering: z.enum(["ASC", "DESC"]).default("DESC"),
+    })
+    .strict()
+    .default({ by: "ID", ordering: "DESC" });
 
-const normalizeRawOptions = (options?: RawOptions) => ({
-    includeRaw: options?.includeRaw !== false,
-    maxRawBytes:
-        options?.maxRawBytes !== undefined
-            ? Math.max(0, options.maxRawBytes)
-            : DEFAULT_MAX_RAW_BYTES,
+const cursorPaginationSchema = z.object({
+    limit: z.number().int().min(1).max(500).default(50),
+    cursor: z.string().min(1).optional(),
+    direction: z.enum(["after", "before"]).default("after"),
 });
 
-const serializeWsMessageEdit = (
-    edit?: StreamWsMessageEditNode,
-    options?: RawOptions,
-): SerializedWsMessageEdit | undefined => {
-    if (edit === undefined) return undefined;
-    const { includeRaw, maxRawBytes } = normalizeRawOptions(options);
-    const size = edit.length;
-    if (!includeRaw || size > maxRawBytes) {
-        return {
-            id: edit.id,
-            alteration: edit.alteration,
-            direction: edit.direction,
-            format: edit.format,
-            length: edit.length,
-            createdAt: edit.createdAt,
-            raw: formatBinaryPlaceholder(size),
-            rawUtf8: formatBinaryPlaceholder(size),
-            rawBase64: formatBinaryPlaceholder(size),
-            rawEncoding: "omitted",
-        };
-    }
-    const rawBase64 = edit.raw ?? undefined;
-    const rawUtf8 =
-        rawBase64 !== undefined ? Buffer.from(rawBase64, "base64").toString("utf8") : undefined;
-    return {
-        id: edit.id,
-        alteration: edit.alteration,
-        direction: edit.direction,
-        format: edit.format,
-        length: edit.length,
-        createdAt: edit.createdAt,
-        raw: rawBase64,
-        rawUtf8,
-        rawBase64,
-        rawEncoding: "base64",
-    };
-};
+const defaultWebSocketSerialization = {
+    include_binary: false,
+    include_edited_payload: false,
+    max_text_payload_chars: DEFAULT_MAX_TEXT_PAYLOAD_CHARS,
+    max_binary_payload_bytes: DEFAULT_MAX_BINARY_BODY_BYTES,
+} satisfies WebSocketSerializationOptionsInput;
 
-const serializeWsMessage = (
+const websocketSerializationSchema = z
+    .object({
+        include_binary: z.boolean().default(defaultWebSocketSerialization.include_binary),
+        include_edited_payload: z
+            .boolean()
+            .default(defaultWebSocketSerialization.include_edited_payload),
+        max_text_payload_chars: z
+            .number()
+            .int()
+            .min(0)
+            .default(defaultWebSocketSerialization.max_text_payload_chars),
+        max_binary_payload_bytes: z
+            .number()
+            .int()
+            .min(0)
+            .default(defaultWebSocketSerialization.max_binary_payload_bytes),
+    })
+    .strict()
+    .default(defaultWebSocketSerialization);
+
+const listStreamsSchema = z
+    .object({
+        ...cursorPaginationSchema.shape,
+        protocol: z.enum(["WS", "SSE"]).default("WS"),
+        scope_id: idSchema.nullable().default(null),
+        order: wsOrderSchema,
+    })
+    .strict();
+
+const getStreamsSchema = z.object({ ids: idArraySchema }).strict();
+
+const listMessagesSchema = z
+    .object({
+        ...cursorPaginationSchema.shape,
+        stream_id: idSchema,
+        order: wsOrderSchema,
+        serialization: websocketSerializationSchema,
+        fields: z
+            .array(z.string().min(1))
+            .nullable()
+            .default(null)
+            .transform((value) => value ?? undefined),
+        exclude_fields: z
+            .array(z.string().min(1))
+            .nullable()
+            .default(null)
+            .transform((value) => value ?? undefined),
+    })
+    .strict();
+
+const getMessagesSchema = z
+    .object({
+        ids: idArraySchema,
+        serialization: websocketSerializationSchema,
+        fields: z
+            .array(z.string().min(1))
+            .nullable()
+            .default(null)
+            .transform((value) => value ?? undefined),
+        exclude_fields: z
+            .array(z.string().min(1))
+            .nullable()
+            .default(null)
+            .transform((value) => value ?? undefined),
+    })
+    .strict();
+
+const getMessageEditsSchema = z
+    .object({
+        ids: idArraySchema,
+        serialization: websocketSerializationSchema,
+    })
+    .strict();
+
+const messageTime = (message: StreamWsMessageNode) => message.head?.createdAt ?? "";
+
+const decodePayload = (raw?: string) =>
+    raw !== undefined && raw !== "" ? Buffer.from(raw, "base64") : Buffer.alloc(0);
+
+const serializeEditPayload = (
+    edit: StreamWsMessageEditNode | undefined,
+    options: WebSocketSerializationOptions,
+) =>
+    serializeBytes({
+        bytes: decodePayload(edit?.raw),
+        includeBinary: options.includeBinary,
+        maxTextChars: options.maxTextPayloadChars,
+        maxBinaryBytes: options.maxBinaryPayloadBytes,
+    });
+
+const normalizeStream = (stream?: StreamNode) =>
+    stream === undefined || stream === null
+        ? undefined
+        : {
+              id: toNumericId(stream.id),
+              host: stream.host,
+              port: stream.port,
+              path: stream.path,
+              secure: stream.isTls,
+              direction: stream.direction,
+              source: stream.source,
+              protocol: stream.protocol,
+              createdAt: stream.createdAt,
+          };
+
+const serializeMessage = (
     message: StreamWsMessageNode,
-    options?: RawOptions,
-): SerializedWsMessage => ({
-    id: message.id,
-    streamId: message.stream?.id ?? undefined,
-    head: serializeWsMessageEdit(message.head, options),
-    edits: message.edits ?? [],
+    options: WebSocketSerializationOptions,
+): SerializedWebSocketMessage => {
+    const editedPayload = options.includeEditedPayload
+        ? serializeEditPayload(message.head, options)
+        : undefined;
+    const result: SerializedWebSocketMessage = {
+        id: toNumericId(message.id),
+        streamId: message.stream?.id !== undefined ? toNumericId(message.stream.id) : undefined,
+        headId: message.head?.id !== undefined ? toNumericId(message.head.id) : undefined,
+        editIds: (message.edits ?? []).map((edit) => toNumericId(edit.id)),
+        time: messageTime(message),
+        direction: message.head?.direction ?? "",
+        alteration: message.head?.alteration,
+        format: message.head?.format,
+        length: message.head?.length ?? 0,
+        payload: serializeEditPayload(message.head, options),
+        editedPayload,
+        stream: normalizeStream(message.stream),
+    };
+    return result;
+};
+
+const cursorVariables = (input: { limit?: number; cursor?: string; direction?: string }) => {
+    const limit = Math.max(1, Math.min(500, input.limit ?? 50));
+    if (input.direction === "before") {
+        return { last: limit, before: input.cursor };
+    }
+    return { first: limit, after: input.cursor };
+};
+
+const pageInfo = (connection?: { pageInfo?: StreamConnection["pageInfo"] }) => ({
+    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
+    hasPreviousPage: connection?.pageInfo?.hasPreviousPage ?? false,
+    startCursor: connection?.pageInfo?.startCursor ?? null,
+    endCursor: connection?.pageInfo?.endCursor ?? null,
 });
 
-const serializeWsMessageConnection = (
-    connection?: StreamWsMessageConnection,
-    options?: RawOptions,
+const queryWebSocketStreams = async (
+    sdk: ToolContext["sdk"],
+    input: z.infer<typeof listStreamsSchema>,
 ) => {
-    if (connection === undefined) return undefined;
+    const response = await sdk.graphql.execute<StreamsResponse>(LIST_STREAMS_QUERY, {
+        ...cursorVariables(input),
+        protocol: input.protocol,
+        scopeId: input.scope_id ?? undefined,
+        order: input.order,
+    });
+    if (response.errors !== undefined && response.errors.length > 0) {
+        throw new Error(JSON.stringify(response.errors));
+    }
+    const connection = response.data?.streams;
+    const edges = connection?.edges ?? [];
     return {
-        pageInfo: connection.pageInfo ?? undefined,
-        snapshot: connection.snapshot ?? undefined,
-        count: connection.count ?? undefined,
-        edges: (connection.edges ?? []).map((edge) => ({
-            cursor: edge.cursor,
-            node: serializeWsMessage(edge.node, options),
-        })),
-        nodes: (connection.nodes ?? []).map((node) => serializeWsMessage(node, options)),
+        pageInfo: pageInfo(connection),
+        snapshot: connection?.snapshot,
+        count: connection?.count,
+        items: edges
+            .map((edge) => {
+                const stream = normalizeStream(edge.node);
+                return stream === undefined ? null : { cursor: edge.cursor, ...stream };
+            })
+            .filter((item) => item !== null),
     };
 };
 
-const buildOrderInput = (input?: { by?: "ID"; ordering?: "ASC" | "DESC" }) => ({
-    by: input?.by ?? "ID",
-    ordering: input?.ordering ?? "DESC",
-});
+const queryWebSocketMessages = async (
+    sdk: ToolContext["sdk"],
+    input: ListWsMessagesInput,
+    projection: FieldProjection | undefined,
+) => {
+    const options = normalizeWebSocketSerialization(input.serialization);
+    const response = await sdk.graphql.execute<StreamWsMessagesResponse>(
+        LIST_STREAM_WS_MESSAGES_QUERY,
+        {
+            streamId: input.stream_id,
+            ...cursorVariables(input),
+            order: input.order,
+        },
+    );
+    if (response.errors !== undefined && response.errors.length > 0) {
+        throw new Error(JSON.stringify(response.errors));
+    }
+    const connection = response.data?.streamWsMessages;
+    const edges = connection?.edges ?? [];
+    const items = [];
+    for (const edge of edges) {
+        items.push({
+            cursor: edge.cursor,
+            ...serializeMessage(edge.node, options),
+        });
+    }
+    return {
+        pageInfo: pageInfo(connection),
+        snapshot: connection?.snapshot,
+        count: connection?.count,
+        items: applyProjectionToResults(items, projection),
+    };
+};
 
 export const registerWebsocketTools = ({ server, sdk, store, permissions }: ToolContext) => {
-    const idSchema = z.preprocess(
-        (value) => (typeof value === "number" ? String(value) : value),
-        z.string().min(1),
-    );
-    const orderSchema = z
-        .object({
-            by: z.enum(["ID"]).optional(),
-            ordering: z.enum(["ASC", "DESC"]).optional(),
-        })
-        .strict();
-    type OrderInput = z.infer<typeof orderSchema>;
-    const protocolSchema = z.preprocess(
-        (value) => (value === null || value === "" ? undefined : value),
-        z.enum(["WS", "SSE"]).default("WS"),
-    );
-    const directionSchema = z.preprocess(
-        (value) => (value === null || value === "" ? undefined : value),
-        z.enum(["BOTH", "CLIENT", "SERVER"]).optional(),
-    );
-    const paginationSchema = z
-        .object({
-            first: z.number().int().min(1).max(500).optional(),
-            after: z.string().min(1).optional(),
-            last: z.number().int().min(1).max(500).optional(),
-            before: z.string().min(1).optional(),
-        })
-        .strict();
-    const offsetSchema = z
-        .object({
-            offset: z.number().int().min(0).optional(),
-            limit: z.number().int().min(1).max(500).optional(),
-        })
-        .strict();
-    const rawOptionsSchema = z
-        .object({
-            includeRaw: z.boolean().optional(),
-            maxRawBytes: z.number().int().min(0).optional(),
-        })
-        .strict();
-    type RawOptionsInput = z.infer<typeof rawOptionsSchema>;
-    const streamIdSchema = z.preprocess(
-        (value) => (value === null || value === "" ? undefined : value),
-        idSchema.optional(),
-    );
-    const getStreamSchema = z.object({ ids: z.array(idSchema).min(1) }).strict();
-    const getMessageSchema = z
-        .object({
-            ids: z.array(idSchema).min(1),
-            rawOptions: rawOptionsSchema.optional(),
-        })
-        .strict();
-
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.websocket.listStreams",
         group: ToolGroupId.WsSafe,
-        toolName: "list-websocket-streams",
+        toolName: "list_websocket_streams",
         description:
-            "List WebSocket/SSE streams (cursor pagination). " +
-            "Use first/after or last/before; feed pageInfo.* back as after/before. " +
-            'Example: { "first": 50, "protocol": "WS" }.',
-        inputSchema: paginationSchema
-            .extend({
-                protocol: protocolSchema,
-                scopeId: streamIdSchema,
-                order: orderSchema.optional(),
-            })
-            .strict(),
+            "List WebSocket/SSE streams with native cursor pagination. " +
+            'Example: { "limit": 50, "protocol": "WS" }.',
+        inputSchema: listStreamsSchema,
         handler: async (params) => {
-            const orderInput = params.order as OrderInput | undefined;
-            const order = orderInput ? buildOrderInput(orderInput) : undefined;
-            const variables: Record<string, unknown> = {
-                first: params.first,
-                after: params.after,
-                last: params.last,
-                before: params.before,
-                order,
-            };
-            variables.protocol = params.protocol ?? "WS";
-            if (params.scopeId !== undefined && params.scopeId !== null) {
-                variables.scopeId = params.scopeId;
-            }
-            const response = await sdk.graphql.execute<StreamsResponse>(
-                LIST_STREAMS_QUERY,
-                variables,
-            );
-            return {
-                content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
-            };
+            const input = listStreamsSchema.parse(params);
+            const result = await queryWebSocketStreams(sdk, input);
+            return { content: [{ type: "text", text: stringifyResult(result) }] };
         },
     });
 
     registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.websocket.listStreamsByOffset",
+        action: "sdk.websocket.getStreamsByIds",
         group: ToolGroupId.WsSafe,
-        toolName: "list-websocket-streams-by-offset",
-        description:
-            "List WebSocket/SSE streams (offset/limit pagination). " +
-            'Example: { "offset": 0, "limit": 200, "protocol": "WS" }.',
-        inputSchema: offsetSchema
-            .extend({
-                protocol: protocolSchema,
-                scopeId: streamIdSchema,
-                order: orderSchema.optional(),
-            })
-            .strict(),
+        toolName: "get_websocket_streams_by_ids",
+        description: 'Fetch exact WebSocket/SSE streams by ID. Example: { "ids": [1] }.',
+        inputSchema: getStreamsSchema,
         handler: async (params) => {
-            const variables: Record<string, unknown> = {
-                offset: params.offset ?? 0,
-                limit: params.limit ?? 200,
-                order: buildOrderInput(params.order as OrderInput | undefined),
-            };
-            variables.protocol = params.protocol ?? "WS";
-            if (params.scopeId !== undefined && params.scopeId !== null) {
-                variables.scopeId = params.scopeId;
+            const { ids } = getStreamsSchema.parse(params);
+            const results = [];
+            for (const id of ids) {
+                const response = await sdk.graphql.execute<StreamResponse>(GET_STREAM_QUERY, {
+                    id,
+                });
+                const stream = normalizeStream(response.data?.stream);
+                if (stream === undefined) {
+                    results.push({ id, error: "not found" });
+                } else {
+                    results.push({ id, item: stream });
+                }
             }
-            const response = await sdk.graphql.execute<StreamsByOffsetResponse>(
-                LIST_STREAMS_BY_OFFSET_QUERY,
-                variables,
-            );
             return {
-                content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
-            };
-        },
-    });
-
-    registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.websocket.getStream",
-        group: ToolGroupId.WsSafe,
-        toolName: "get-websocket-stream",
-        description: 'Get WebSocket/SSE streams by ID. Example: { "ids": [1] }.',
-        inputSchema: getStreamSchema,
-        handler: async (params) => {
-            const { ids } = getStreamSchema.parse(params);
-            const results = await Promise.all(
-                ids.map(async (id) => {
-                    const response = await sdk.graphql.execute<StreamResponse>(GET_STREAM_QUERY, {
-                        id,
-                    });
-                    return { id, result: response.data ?? response };
-                }),
-            );
-            return {
-                content: [{ type: "text", text: stringifyResult(results) }],
+                content: [
+                    {
+                        type: "text",
+                        text: stringifyResult({
+                            requested: ids.length,
+                            found: results.filter((item) => "item" in item).length,
+                            results,
+                        }),
+                    },
+                ],
             };
         },
     });
@@ -365,43 +402,61 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.websocket.listMessages",
         group: ToolGroupId.WsSafe,
-        toolName: "list-websocket-messages",
+        toolName: "list_websocket_messages",
         description:
-            "List WebSocket messages for a stream (cursor pagination). " +
-            "Use first/after or last/before; feed pageInfo.* back as after/before. " +
-            "rawOptions: { includeRaw?, maxRawBytes? } (defaults: includeRaw=true, maxRawBytes=256). " +
-            'Example: { "streamId": 1, "first": 100 }.',
-        inputSchema: paginationSchema
-            .extend({
-                streamId: streamIdSchema,
-                order: orderSchema.optional(),
-                rawOptions: rawOptionsSchema.optional(),
-            })
-            .strict()
-            .refine((value) => value.streamId !== undefined, "streamId is required"),
+            "List WebSocket/SSE messages for one stream with native cursor pagination, serialization, and projection. " +
+            'Example: { "stream_id": 1, "limit": 50, "fields": ["cursor", "id", "direction", "payload.text"] }.',
+        inputSchema: listMessagesSchema,
         handler: async (params) => {
-            const orderInput = params.order as OrderInput | undefined;
-            const rawOptions = params.rawOptions as RawOptionsInput | undefined;
-            const response = await sdk.graphql.execute<StreamWsMessagesResponse>(
-                LIST_STREAM_WS_MESSAGES_QUERY,
-                {
-                    streamId: params.streamId,
-                    first: params.first,
-                    after: params.after,
-                    last: params.last,
-                    before: params.before,
-                    order: buildOrderInput(orderInput),
-                },
-            );
-            const connection = serializeWsMessageConnection(
-                response.data?.streamWsMessages,
-                rawOptions,
-            );
+            const input = listMessagesSchema.parse(params) as ListWsMessagesInput;
+            const projection = resolveFieldProjection({
+                fields: input.fields,
+                excludeFields: input.exclude_fields,
+                allowedPaths: WS_MESSAGE_FIELD_PATHS,
+            });
+            const result = await queryWebSocketMessages(sdk, input, projection);
+            return { content: [{ type: "text", text: stringifyResult(result) }] };
+        },
+    });
+
+    registerToolAction(server, sdk, store, permissions, {
+        action: "sdk.websocket.getMessagesByIds",
+        group: ToolGroupId.WsSafe,
+        toolName: "get_websocket_messages_by_ids",
+        description:
+            "Fetch exact WebSocket/SSE messages by message ID with projection. " +
+            'Example: { "ids": [1], "fields": ["id", "payload.text"] }.',
+        inputSchema: getMessagesSchema,
+        handler: async (params) => {
+            const input = getMessagesSchema.parse(params);
+            const projection = resolveFieldProjection({
+                fields: input.fields,
+                excludeFields: input.exclude_fields,
+                allowedPaths: WS_MESSAGE_FIELD_PATHS,
+            });
+            const options = normalizeWebSocketSerialization(input.serialization);
+            const results = [];
+            for (const id of input.ids) {
+                const response = await sdk.graphql.execute<StreamWsMessageResponse>(
+                    GET_STREAM_WS_MESSAGE_QUERY,
+                    { id },
+                );
+                const message = response.data?.streamWsMessage;
+                if (message === undefined || message === null) {
+                    results.push({ id, error: "not found" });
+                    continue;
+                }
+                results.push({ id, item: serializeMessage(message, options) });
+            }
             return {
                 content: [
                     {
                         type: "text",
-                        text: stringifyResult(connection ?? response.data ?? response),
+                        text: stringifyResult({
+                            requested: input.ids.length,
+                            found: results.filter((item) => "item" in item).length,
+                            results: applyProjectionToLookupResults(results, projection),
+                        }),
                     },
                 ],
             };
@@ -409,146 +464,52 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
     });
 
     registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.websocket.listMessagesByOffset",
+        action: "sdk.websocket.getMessageEditsByIds",
         group: ToolGroupId.WsSafe,
-        toolName: "list-websocket-messages-by-offset",
+        toolName: "get_websocket_message_edits_by_ids",
         description:
-            "List WebSocket messages for a stream (offset/limit pagination). " +
-            "rawOptions: { includeRaw?, maxRawBytes? } (defaults: includeRaw=true, maxRawBytes=256). " +
-            'Example: { "streamId": 1, "offset": 0, "limit": 200 }.',
-        inputSchema: offsetSchema
-            .extend({
-                streamId: streamIdSchema,
-                order: orderSchema.optional(),
-                rawOptions: rawOptionsSchema.optional(),
-            })
-            .strict()
-            .refine((value) => value.streamId !== undefined, "streamId is required"),
+            "Fetch exact WebSocket/SSE message edits by edit ID. " +
+            'Example: { "ids": [1], "serialization": { "include_binary": false } }.',
+        inputSchema: getMessageEditsSchema,
         handler: async (params) => {
-            const orderInput = params.order as OrderInput | undefined;
-            const rawOptions = params.rawOptions as RawOptionsInput | undefined;
-            const response = await sdk.graphql.execute<StreamWsMessagesByOffsetResponse>(
-                LIST_STREAM_WS_MESSAGES_BY_OFFSET_QUERY,
-                {
-                    streamId: params.streamId,
-                    offset: params.offset ?? 0,
-                    limit: params.limit ?? 200,
-                    order: buildOrderInput(orderInput),
-                },
-            );
-            const connection = serializeWsMessageConnection(
-                response.data?.streamWsMessagesByOffset,
-                rawOptions,
-            );
+            const input = getMessageEditsSchema.parse(params);
+            const options = normalizeWebSocketSerialization(input.serialization);
+            const results = [];
+            for (const id of input.ids) {
+                const response = await sdk.graphql.execute<StreamWsMessageEditResponse>(
+                    GET_STREAM_WS_MESSAGE_EDIT_QUERY,
+                    { id },
+                );
+                const edit = response.data?.streamWsMessageEdit;
+                if (edit === undefined || edit === null) {
+                    results.push({ id, error: "not found" });
+                    continue;
+                }
+                results.push({
+                    id,
+                    item: {
+                        id: toNumericId(edit.id),
+                        alteration: edit.alteration,
+                        direction: edit.direction,
+                        format: edit.format,
+                        length: edit.length,
+                        createdAt: edit.createdAt,
+                        payload: serializeEditPayload(edit, options),
+                    },
+                });
+            }
             return {
                 content: [
                     {
                         type: "text",
-                        text: stringifyResult(connection ?? response.data ?? response),
+                        text: stringifyResult({
+                            requested: input.ids.length,
+                            found: results.filter((item) => "item" in item).length,
+                            results,
+                        }),
                     },
                 ],
             };
-        },
-    });
-
-    registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.websocket.getMessage",
-        group: ToolGroupId.WsSafe,
-        toolName: "get-websocket-message",
-        description:
-            "Get WebSocket messages by ID. " +
-            "rawOptions: { includeRaw?, maxRawBytes? } (defaults: includeRaw=true, maxRawBytes=256). " +
-            'Example: { "ids": [123] }.',
-        inputSchema: getMessageSchema,
-        handler: async (params) => {
-            const rawOptions = params.rawOptions as RawOptionsInput | undefined;
-            const { ids } = getMessageSchema.parse(params);
-            const results = await Promise.all(
-                ids.map(async (id) => {
-                    const response = await sdk.graphql.execute<StreamWsMessageResponse>(
-                        GET_STREAM_WS_MESSAGE_QUERY,
-                        { id },
-                    );
-                    const message = response.data?.streamWsMessage;
-                    const serialized =
-                        message !== undefined ? serializeWsMessage(message, rawOptions) : undefined;
-                    return { id, result: serialized ?? response.data ?? response };
-                }),
-            );
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: stringifyResult(results),
-                    },
-                ],
-            };
-        },
-    });
-
-    registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.websocket.getMessageEdit",
-        group: ToolGroupId.WsSafe,
-        toolName: "get-websocket-message-edit",
-        description:
-            "Get specific message edits by edit ID (not the message ID). " +
-            "rawOptions: { includeRaw?, maxRawBytes? } (defaults: includeRaw=true, maxRawBytes=256). " +
-            'Example: { "ids": [123] }.',
-        inputSchema: getMessageSchema,
-        handler: async (params) => {
-            const rawOptions = params.rawOptions as RawOptionsInput | undefined;
-            const { ids } = getMessageSchema.parse(params);
-            const results = await Promise.all(
-                ids.map(async (id) => {
-                    const response = await sdk.graphql.execute<StreamWsMessageEditResponse>(
-                        GET_STREAM_WS_MESSAGE_EDIT_QUERY,
-                        { id },
-                    );
-                    const edit = response.data?.streamWsMessageEdit;
-                    const serialized =
-                        edit !== undefined ? serializeWsMessageEdit(edit, rawOptions) : undefined;
-                    return { id, result: serialized ?? response.data ?? response };
-                }),
-            );
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: stringifyResult(results),
-                    },
-                ],
-            };
-        },
-    });
-
-    registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.websocket.streamsByDirection",
-        group: ToolGroupId.WsSafe,
-        toolName: "list-websocket-streams-by-direction",
-        description:
-            "List WebSocket/SSE streams filtered by direction (CLIENT|SERVER|BOTH). " +
-            'Example: { "direction": "CLIENT", "protocol": "WS" }.',
-        inputSchema: z
-            .object({
-                direction: directionSchema,
-                protocol: protocolSchema.optional(),
-                limit: z.number().int().min(1).max(500).optional(),
-            })
-            .strict()
-            .refine((value) => value.direction !== undefined, "direction is required"),
-        handler: async (params) => {
-            const response = await sdk.graphql.execute<StreamsByOffsetResponse>(
-                LIST_STREAMS_BY_OFFSET_QUERY,
-                {
-                    offset: 0,
-                    limit: params.limit ?? 200,
-                    protocol: params.protocol,
-                    order: { by: "ID", ordering: "DESC" },
-                },
-            );
-            const streams = response.data?.streamsByOffset?.nodes ?? [];
-            const filtered = streams.filter((stream) => stream.direction === params.direction);
-            return { content: [{ type: "text", text: stringifyResult(filtered) }] };
         },
     });
 };

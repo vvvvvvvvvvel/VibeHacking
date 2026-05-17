@@ -16,7 +16,7 @@ export const HTTPQL_HELP_SHORT = [
     'req.method.eq:"POST"',
     'req.path.cont:"/api/" AND (req.method.eq:"POST" OR req.method.eq:"PUT")',
     "resp.code.eq:200",
-    "Use tool: get-httpql-help for more.",
+    "Use tool: get_httpql_help for more.",
 ].join("\n");
 
 export const HTTPQL_HELP_PROMPT = [
@@ -247,6 +247,58 @@ export const toNumericId = (value: string | number): number | string => {
     return /^[0-9]+$/.test(trimmed) ? Number(trimmed) : value;
 };
 
+const snakeCaseKey = (key: string) =>
+    key
+        .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+        .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+        .replace(/-/g, "_")
+        .toLowerCase();
+
+const isCursorKey = (key: string) =>
+    key === "cursor" ||
+    key === "startCursor" ||
+    key === "endCursor" ||
+    key === "start_cursor" ||
+    key === "end_cursor";
+
+const isIdKey = (key: string) => /^(id|.*Id|.*Ids|.*_id|.*_ids)$/.test(key);
+
+const nullKeys = new Set([
+    "body",
+    "query",
+    "response",
+    "matchContext",
+    "mimeType",
+    "raw",
+    "bodyBase64",
+    "rawBase64",
+    "editedPayload",
+    "rawUtf8",
+    "requestRawBase64",
+    "requestRawUtf8",
+    "responseRawBase64",
+    "responseRawUtf8",
+    "body_base64",
+    "match_context",
+    "mime_type",
+    "query",
+    "response",
+    "raw_base64",
+    "edited_payload",
+    "raw_utf8",
+    "request_raw_base64",
+    "request_raw_utf8",
+    "response_raw_base64",
+    "response_raw_utf8",
+]);
+
+const coerceIdValue = (value: unknown) => {
+    if (Array.isArray(value)) {
+        return value.map((item) => (typeof item === "string" ? toNumericId(item) : item));
+    }
+    return typeof value === "string" ? toNumericId(value) : value;
+};
+
 export const coerceNumericIds = (value: unknown): unknown => {
     if (Array.isArray(value)) {
         return value.map((item) => coerceNumericIds(item));
@@ -254,17 +306,6 @@ export const coerceNumericIds = (value: unknown): unknown => {
     if (value !== null && typeof value === "object") {
         const entries = Object.entries(value as Record<string, unknown>);
         const result: Record<string, unknown> = {};
-        const nullKeys = new Set([
-            "body",
-            "raw",
-            "bodyBase64",
-            "rawBase64",
-            "rawUtf8",
-            "requestRawBase64",
-            "requestRawUtf8",
-            "responseRawBase64",
-            "responseRawUtf8",
-        ]);
         for (const [key, val] of entries) {
             if (val === undefined) {
                 if (nullKeys.has(key)) {
@@ -272,20 +313,12 @@ export const coerceNumericIds = (value: unknown): unknown => {
                 }
                 continue;
             }
-            if (key === "cursor" || key === "startCursor" || key === "endCursor") {
+            if (isCursorKey(key)) {
                 result[key] = val;
                 continue;
             }
-            if (/^(id|.*Id|.*Ids)$/.test(key)) {
-                if (Array.isArray(val)) {
-                    result[key] = val.map((item) =>
-                        typeof item === "string" ? toNumericId(item) : item,
-                    );
-                } else if (typeof val === "string") {
-                    result[key] = toNumericId(val);
-                } else {
-                    result[key] = val;
-                }
+            if (isIdKey(key)) {
+                result[key] = coerceIdValue(val);
                 continue;
             }
             result[key] = coerceNumericIds(val);
@@ -295,7 +328,37 @@ export const coerceNumericIds = (value: unknown): unknown => {
     return value;
 };
 
-export const stringifyResult = (value: unknown): string => JSON.stringify(coerceNumericIds(value));
+export const toWireValue = (value: unknown, parentKey?: string): unknown => {
+    if (Array.isArray(value)) {
+        return value.map((item) => toWireValue(item, parentKey));
+    }
+    if (value !== null && typeof value === "object") {
+        const preserveKeys = parentKey === "headers";
+        const result: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+            const wireKey = preserveKeys ? key : snakeCaseKey(key);
+            if (val === undefined) {
+                if (nullKeys.has(key)) {
+                    result[wireKey] = null;
+                }
+                continue;
+            }
+            if (isCursorKey(key)) {
+                result[wireKey] = val;
+                continue;
+            }
+            if (isIdKey(key)) {
+                result[wireKey] = coerceIdValue(val);
+                continue;
+            }
+            result[wireKey] = toWireValue(val, key);
+        }
+        return result;
+    }
+    return value;
+};
+
+export const stringifyResult = (value: unknown): string => JSON.stringify(toWireValue(value));
 
 export const toId = (value: string): ID => value as unknown as ID;
 export const toDedupeKey = (value: string): DedupeKey => value as unknown as DedupeKey;

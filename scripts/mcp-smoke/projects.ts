@@ -5,7 +5,7 @@ export const runProjects = async (tools: Set<string>) => {
 
     logStep("Projects");
 
-    await runIfTool("get-project-info", async () => {
-        await callTool("get-project-info", { field: "full" });
+    await runIfTool("get_project_info", async () => {
+        await callTool("get_project_info", { field: "full" });
     });
 };

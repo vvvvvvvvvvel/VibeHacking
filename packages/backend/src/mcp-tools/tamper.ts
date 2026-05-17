@@ -5,7 +5,6 @@ import {
     CREATE_TAMPER_RULE_MUTATION,
     DELETE_TAMPER_RULE_COLLECTION_MUTATION,
     DELETE_TAMPER_RULE_MUTATION,
-    EXPORT_TAMPER_MUTATION,
     EXPORT_TAMPER_WITH_TARGET_MUTATION,
     GET_TAMPER_RULE_COLLECTION_QUERY,
     GET_TAMPER_RULE_QUERY,
@@ -40,8 +39,8 @@ const PARTS = [
     "body",
     "path",
     "method",
-    "firstLine",
-    "statusCode",
+    "first_line",
+    "status_code",
     "all",
     "sni",
 ] as const;
@@ -54,6 +53,68 @@ const extractGraphqlResult = (response: unknown) => {
     }
     return response;
 };
+
+const normalizeQueryClause = (query: unknown): unknown => {
+    if (typeof query === "string" || query === null || query === undefined) return query;
+    if (typeof query === "object") {
+        const code = (query as { code?: unknown }).code;
+        if (typeof code === "string") return code;
+    }
+    return query;
+};
+
+const normalizeTamperRule = (rule: unknown): unknown => {
+    if (rule === null || typeof rule !== "object") return rule;
+    return {
+        ...(rule as Record<string, unknown>),
+        condition: normalizeQueryClause((rule as { condition?: unknown }).condition),
+    };
+};
+
+const normalizeTamperCollection = (collection: unknown): unknown => {
+    if (collection === null || typeof collection !== "object") return collection;
+    const rules = (collection as { rules?: unknown }).rules;
+    return {
+        ...(collection as Record<string, unknown>),
+        rules: Array.isArray(rules) ? rules.map(normalizeTamperRule) : rules,
+    };
+};
+
+const normalizeTamperResult = (result: unknown): unknown => {
+    if (result === null || typeof result !== "object") return result;
+    const data = result as Record<string, unknown>;
+    if (Array.isArray(data.tamperRuleCollections)) {
+        return {
+            ...data,
+            tamperRuleCollections: data.tamperRuleCollections.map(normalizeTamperCollection),
+        };
+    }
+    if (data.tamperRuleCollection !== undefined) {
+        return {
+            ...data,
+            tamperRuleCollection: normalizeTamperCollection(data.tamperRuleCollection),
+        };
+    }
+    if (data.tamperRule !== undefined) {
+        return { ...data, tamperRule: normalizeTamperRule(data.tamperRule) };
+    }
+    for (const key of ["createTamperRule", "updateTamperRule"]) {
+        const mutation = data[key];
+        if (mutation !== null && typeof mutation === "object" && "rule" in mutation) {
+            return {
+                ...data,
+                [key]: {
+                    ...(mutation as Record<string, unknown>),
+                    rule: normalizeTamperRule((mutation as { rule?: unknown }).rule),
+                },
+            };
+        }
+    }
+    return result;
+};
+
+const toGraphqlConditionInput = (condition: string | undefined) =>
+    condition === undefined ? undefined : { HTTPQL: { code: condition } };
 
 const buildMatcherName = (name: string) => ({ name });
 const buildMatcherRaw = (
@@ -118,7 +179,7 @@ const buildSimpleSection = (input: {
         return section;
     }
 
-    if (part === "body" || part === "path" || part === "firstLine" || part === "all") {
+    if (part === "body" || part === "path" || part === "first_line" || part === "all") {
         const rawOp = {
             raw: {
                 matcher: buildMatcherRaw(matcher),
@@ -130,7 +191,7 @@ const buildSimpleSection = (input: {
                 ? `${prefix}Body`
                 : part === "path"
                   ? `${prefix}Path`
-                  : part === "firstLine"
+                  : part === "first_line"
                     ? `${prefix}FirstLine`
                     : `${prefix}All`;
         section[key] = { operation: rawOp };
@@ -144,7 +205,7 @@ const buildSimpleSection = (input: {
         return section;
     }
 
-    if (part === "statusCode") {
+    if (part === "status_code") {
         section["responseStatusCode"] = {
             operation: { update: { replacer: buildReplacer(replacer) } },
         };
@@ -197,10 +258,10 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                     });
                 }
             }
-            if (value.part === "statusCode" && value.target === "request") {
+            if (value.part === "status_code" && value.target === "request") {
                 ctx.addIssue({
                     code: "custom",
-                    message: "statusCode is only valid for response",
+                    message: "status_code is only valid for response",
                     path: ["part"],
                 });
             }
@@ -212,7 +273,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                 });
             }
         });
-    const simpleRuleCreateSchema = simpleRuleBaseSchema.safeExtend({ collectionId: idSchema });
+    const simpleRuleCreateSchema = simpleRuleBaseSchema.safeExtend({ collection_id: idSchema });
     const simpleRuleUpdateSchema = simpleRuleBaseSchema.safeExtend({ id: idSchema });
     const idArraySchema = z.array(idSchema).min(1);
     const renamePairSchema = z.object({ id: idSchema, name: z.string().min(1) }).strict();
@@ -224,12 +285,12 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
     const createRuleSchema = z.object({ items: z.array(simpleRuleCreateSchema).min(1) }).strict();
     const updateRuleSchema = z.object({ items: z.array(simpleRuleUpdateSchema).min(1) }).strict();
     const renameRuleSchema = z.object({ items: z.array(renamePairSchema).min(1) }).strict();
-    const deleteRuleSchema = z.object({ ruleIds: idArraySchema }).strict();
-    const toggleRuleSchema = z.object({ ruleIds: idArraySchema, enabled: z.boolean() }).strict();
-    const moveRuleSchema = z.object({ ruleIds: idArraySchema, collectionId: idSchema }).strict();
+    const deleteRuleSchema = z.object({ rule_ids: idArraySchema }).strict();
+    const toggleRuleSchema = z.object({ rule_ids: idArraySchema, enabled: z.boolean() }).strict();
+    const moveRuleSchema = z.object({ rule_ids: idArraySchema, collection_id: idSchema }).strict();
     const testTamperRuleSimpleSchema = z
         .object({
-            rawBase64: z.string().min(1),
+            raw_base64: z.string().min(1),
             target: z.enum(TARGETS),
             part: z.enum(PARTS),
             operation: z.enum(OPS),
@@ -241,22 +302,29 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.listCollections",
-        group: ToolGroupId.TemperSafe,
-        toolName: "list-tamper-rule-collections",
+        group: ToolGroupId.TamperSafe,
+        toolName: "list_tamper_rule_collections",
         description: "List Tamper rule collections with their rules. Example: {}.",
         inputSchema: emptySchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
             return {
-                content: [{ type: "text", text: stringifyResult(extractGraphqlResult(response)) }],
+                content: [
+                    {
+                        type: "text",
+                        text: stringifyResult(
+                            normalizeTamperResult(extractGraphqlResult(response)),
+                        ),
+                    },
+                ],
             };
         },
     });
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.getCollection",
-        group: ToolGroupId.TemperSafe,
-        toolName: "get-tamper-rule-collection",
+        group: ToolGroupId.TamperSafe,
+        toolName: "get_tamper_rule_collection",
         description: 'Get Tamper rule collections by ID. Example: { "ids": [1] }.',
         inputSchema: getCollectionSchema,
         handler: async (params) => {
@@ -266,7 +334,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                     const response = await sdk.graphql.execute(GET_TAMPER_RULE_COLLECTION_QUERY, {
                         id,
                     });
-                    return { id, result: extractGraphqlResult(response) };
+                    return { id, result: normalizeTamperResult(extractGraphqlResult(response)) };
                 }),
             );
             return {
@@ -277,24 +345,31 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.listRules",
-        group: ToolGroupId.TemperSafe,
-        toolName: "list-tamper-rules",
+        group: ToolGroupId.TamperSafe,
+        toolName: "list_tamper_rules",
         description:
-            "List Tamper rule collections with their rules (same as list-tamper-rule-collections). " +
+            "List Tamper rule collections with their rules (same as list_tamper_rule_collections). " +
             "Example: {}.",
         inputSchema: emptySchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
             return {
-                content: [{ type: "text", text: stringifyResult(extractGraphqlResult(response)) }],
+                content: [
+                    {
+                        type: "text",
+                        text: stringifyResult(
+                            normalizeTamperResult(extractGraphqlResult(response)),
+                        ),
+                    },
+                ],
             };
         },
     });
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.getRule",
-        group: ToolGroupId.TemperSafe,
-        toolName: "get-tamper-rule",
+        group: ToolGroupId.TamperSafe,
+        toolName: "get_tamper_rule",
         description: 'Get Tamper rules by ID. Example: { "ids": [1] }.',
         inputSchema: getRuleSchema,
         handler: async (params) => {
@@ -302,7 +377,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const results = await Promise.all(
                 ids.map(async (id) => {
                     const response = await sdk.graphql.execute(GET_TAMPER_RULE_QUERY, { id });
-                    return { id, result: extractGraphqlResult(response) };
+                    return { id, result: normalizeTamperResult(extractGraphqlResult(response)) };
                 }),
             );
             return {
@@ -313,8 +388,8 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.createCollection",
-        group: ToolGroupId.TemperSafe,
-        toolName: "create-tamper-rule-collection",
+        group: ToolGroupId.TamperSafe,
+        toolName: "create_tamper_rule_collection",
         description: 'Create Tamper rule collections. Example: { "items": ["My Rules"] }.',
         inputSchema: createCollectionSchema,
         handler: async (params) => {
@@ -336,8 +411,8 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.renameCollection",
-        group: ToolGroupId.TemperSafe,
-        toolName: "rename-tamper-rule-collection",
+        group: ToolGroupId.TamperSafe,
+        toolName: "rename_tamper_rule_collection",
         description:
             'Rename Tamper rule collections. Example: { "items": [{ "id": 1, "name": "Renamed" }] }.',
         inputSchema: renameCollectionSchema,
@@ -360,8 +435,8 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.deleteCollection",
-        group: ToolGroupId.TemperUnsafe,
-        toolName: "delete-tamper-rule-collection",
+        group: ToolGroupId.TamperUnsafe,
+        toolName: "delete_tamper_rule_collection",
         description: 'Delete Tamper rule collections by ID. Example: { "ids": [1] }.',
         inputSchema: deleteCollectionSchema,
         handler: async (params) => {
@@ -383,11 +458,11 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.createRule",
-        group: ToolGroupId.TemperSafe,
-        toolName: "create-tamper-rule",
+        group: ToolGroupId.TamperSafe,
+        toolName: "create_tamper_rule",
         description:
             "Create Tamper rules. " +
-            'Example: { "items": [{ "collectionId": 1, "name": "add-header", "target": "request", "part": "header", "operation": "add", ' +
+            'Example: { "items": [{ "collection_id": 1, "name": "add-header", "target": "request", "part": "header", "operation": "add", ' +
             '"matcher": { "type": "name", "value": "X-Test" }, "replacer": { "type": "term", "value": "1" }, "sources": ["INTERCEPT"] }] }.',
         inputSchema: createRuleSchema,
         handler: async (params) => {
@@ -402,16 +477,19 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                     }
                     const section = buildSimpleSection(item);
                     const input = {
-                        collectionId: item.collectionId,
+                        collectionId: item.collection_id,
                         name: item.name,
                         section,
-                        condition: item.condition,
+                        condition: toGraphqlConditionInput(item.condition),
                         sources: item.sources,
                     };
                     const response = await sdk.graphql.execute(CREATE_TAMPER_RULE_MUTATION, {
                         input,
                     });
-                    return { name: item.name, result: extractGraphqlResult(response) };
+                    return {
+                        name: item.name,
+                        result: normalizeTamperResult(extractGraphqlResult(response)),
+                    };
                 }),
             );
             return {
@@ -422,8 +500,8 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.updateRule",
-        group: ToolGroupId.TemperUnsafe,
-        toolName: "update-tamper-rule",
+        group: ToolGroupId.TamperUnsafe,
+        toolName: "update_tamper_rule",
         description:
             'Update Tamper rules. Example: { "items": [{ "id": 1, "name": "updated", "target": "request", "part": "header", "operation": "update", "matcher": { "type": "name", "value": "X-Test" }, "replacer": { "type": "term", "value": "2" }, "sources": ["INTERCEPT"] }] }.',
         inputSchema: updateRuleSchema,
@@ -441,14 +519,17 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                     const input = {
                         name: item.name,
                         section,
-                        condition: item.condition,
+                        condition: toGraphqlConditionInput(item.condition),
                         sources: item.sources,
                     };
                     const response = await sdk.graphql.execute(UPDATE_TAMPER_RULE_MUTATION, {
                         id: item.id,
                         input,
                     });
-                    return { id: item.id, result: extractGraphqlResult(response) };
+                    return {
+                        id: item.id,
+                        result: normalizeTamperResult(extractGraphqlResult(response)),
+                    };
                 }),
             );
             return {
@@ -459,8 +540,8 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.renameRule",
-        group: ToolGroupId.TemperSafe,
-        toolName: "rename-tamper-rule",
+        group: ToolGroupId.TamperSafe,
+        toolName: "rename_tamper_rule",
         description: 'Rename Tamper rules. Example: { "items": [{ "id": 1, "name": "Renamed" }] }.',
         inputSchema: renameRuleSchema,
         handler: async (params) => {
@@ -479,14 +560,14 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.deleteRule",
-        group: ToolGroupId.TemperUnsafe,
-        toolName: "delete-tamper-rule",
-        description: 'Delete Tamper rules by ID. Example: { "ruleIds": [1] }.',
+        group: ToolGroupId.TamperUnsafe,
+        toolName: "delete_tamper_rule",
+        description: 'Delete Tamper rules by ID. Example: { "rule_ids": [1] }.',
         inputSchema: deleteRuleSchema,
         handler: async (params) => {
-            const { ruleIds } = deleteRuleSchema.parse(params);
+            const { rule_ids } = deleteRuleSchema.parse(params);
             const results = await Promise.all(
-                ruleIds.map(async (id) => {
+                rule_ids.map(async (id) => {
                     const response = await sdk.graphql.execute(DELETE_TAMPER_RULE_MUTATION, { id });
                     return { id, result: extractGraphqlResult(response) };
                 }),
@@ -499,15 +580,15 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.toggleRule",
-        group: ToolGroupId.TemperSafe,
-        toolName: "toggle-tamper-rule",
+        group: ToolGroupId.TamperSafe,
+        toolName: "toggle_tamper_rule",
         description:
-            'Enable or disable Tamper rules. Example: { "ruleIds": [1], "enabled": true }.',
+            'Enable or disable Tamper rules. Example: { "rule_ids": [1], "enabled": true }.',
         inputSchema: toggleRuleSchema,
         handler: async (params) => {
-            const { ruleIds, enabled } = toggleRuleSchema.parse(params);
+            const { rule_ids, enabled } = toggleRuleSchema.parse(params);
             const results = await Promise.all(
-                ruleIds.map(async (id) => {
+                rule_ids.map(async (id) => {
                     const response = await sdk.graphql.execute(TOGGLE_TAMPER_RULE_MUTATION, {
                         id,
                         enabled,
@@ -523,18 +604,18 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.moveRule",
-        group: ToolGroupId.TemperSafe,
-        toolName: "move-tamper-rule",
+        group: ToolGroupId.TamperSafe,
+        toolName: "move_tamper_rule",
         description:
-            'Move Tamper rules to another collection. Example: { "ruleIds": [1], "collectionId": 2 }.',
+            'Move Tamper rules to another collection. Example: { "rule_ids": [1], "collection_id": 2 }.',
         inputSchema: moveRuleSchema,
         handler: async (params) => {
-            const { ruleIds, collectionId } = moveRuleSchema.parse(params);
+            const { rule_ids, collection_id } = moveRuleSchema.parse(params);
             const results = await Promise.all(
-                ruleIds.map(async (id) => {
+                rule_ids.map(async (id) => {
                     const response = await sdk.graphql.execute(MOVE_TAMPER_RULE_MUTATION, {
                         id,
-                        collectionId,
+                        collectionId: collection_id,
                     });
                     return { id, result: extractGraphqlResult(response) };
                 }),
@@ -547,25 +628,35 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.rankRule",
-        group: ToolGroupId.TemperSafe,
-        toolName: "rank-tamper-rule",
-        description: 'Reorder a Tamper rule. Example: { "id": 2, "input": { "afterId": 1 } }.',
+        group: ToolGroupId.TamperSafe,
+        toolName: "rank_tamper_rule",
+        description: 'Reorder a Tamper rule. Example: { "id": 2, "input": { "after_id": 1 } }.',
         inputSchema: z
             .object({
                 id: idSchema,
                 input: z
                     .object({
-                        beforeId: idSchema.optional(),
-                        afterId: idSchema.optional(),
+                        before_id: idSchema.optional(),
+                        after_id: idSchema.optional(),
                     })
                     .strict()
-                    .refine((value) => Boolean(value.beforeId) !== Boolean(value.afterId), {
-                        message: "Provide beforeId or afterId",
+                    .refine((value) => Boolean(value.before_id) !== Boolean(value.after_id), {
+                        message: "Provide before_id or after_id",
                     }),
             })
             .strict(),
         handler: async (params) => {
-            const response = await sdk.graphql.execute(RANK_TAMPER_RULE_MUTATION, params);
+            const parsed = params as {
+                id: string;
+                input: { before_id?: string; after_id?: string };
+            };
+            const response = await sdk.graphql.execute(RANK_TAMPER_RULE_MUTATION, {
+                id: parsed.id,
+                input: {
+                    beforeId: parsed.input.before_id,
+                    afterId: parsed.input.after_id,
+                },
+            });
             return {
                 content: [{ type: "text", text: stringifyResult(extractGraphqlResult(response)) }],
             };
@@ -574,18 +665,18 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.test",
-        group: ToolGroupId.TemperSafe,
-        toolName: "test-tamper-rule",
+        group: ToolGroupId.TamperSafe,
+        toolName: "test_tamper_rule",
         description:
             "Test a Tamper rule against raw HTTP. " +
-            'Example: { "rawBase64": "...", "target": "request", "part": "header", "operation": "add", ' +
+            'Example: { "raw_base64": "...", "target": "request", "part": "header", "operation": "add", ' +
             '"matcher": { "type": "name", "value": "X-Test" }, "replacer": { "type": "term", "value": "1" } }.',
         inputSchema: testTamperRuleSimpleSchema,
         handler: async (params) => {
             const parsed = testTamperRuleSimpleSchema.parse(params);
             const section = buildSimpleSection(parsed);
             const response = await sdk.graphql.execute(TEST_TAMPER_RULE_MUTATION, {
-                input: { raw: parsed.rawBase64, section },
+                input: { raw: parsed.raw_base64, section },
             });
             return {
                 content: [{ type: "text", text: stringifyResult(extractGraphqlResult(response)) }],
@@ -595,8 +686,8 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.tamper.export",
-        group: ToolGroupId.TemperSafe,
-        toolName: "export-tamper",
+        group: ToolGroupId.TamperSafe,
+        toolName: "export_tamper",
         description:
             "Export Tamper configuration. Provide collections or rules (IDs). " +
             'Example: { "collections": [1] }.',
@@ -610,12 +701,30 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                 message: "Provide collections or rules, not both",
             }),
         handler: async (params) => {
-            const hasTarget = params.collections !== undefined || params.rules !== undefined;
-            const response = hasTarget
-                ? await sdk.graphql.execute(EXPORT_TAMPER_WITH_TARGET_MUTATION, {
-                      input: { target: { collections: params.collections, rules: params.rules } },
-                  })
-                : await sdk.graphql.execute(EXPORT_TAMPER_MUTATION);
+            const collectionsInput = Array.isArray(params.collections)
+                ? params.collections
+                : undefined;
+            const rulesInput = Array.isArray(params.rules) ? params.rules : undefined;
+            const hasTarget = collectionsInput !== undefined || rulesInput !== undefined;
+            let target: { collections?: unknown[]; rules?: unknown[] } | undefined = hasTarget
+                ? { collections: collectionsInput, rules: rulesInput }
+                : undefined;
+            if (target === undefined) {
+                const collectionsResponse = await sdk.graphql.execute(
+                    LIST_TAMPER_RULE_COLLECTIONS_QUERY,
+                );
+                const collections = normalizeTamperResult(
+                    extractGraphqlResult(collectionsResponse),
+                ) as { tamperRuleCollections?: Array<{ id?: unknown }> };
+                target = {
+                    collections: (collections.tamperRuleCollections ?? [])
+                        .map((collection) => collection.id)
+                        .filter((id) => id !== undefined && id !== null),
+                };
+            }
+            const response = await sdk.graphql.execute(EXPORT_TAMPER_WITH_TARGET_MUTATION, {
+                input: { target },
+            });
             return {
                 content: [{ type: "text", text: stringifyResult(extractGraphqlResult(response)) }],
             };

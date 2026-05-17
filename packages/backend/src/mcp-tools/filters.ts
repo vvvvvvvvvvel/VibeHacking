@@ -12,6 +12,29 @@ import { ToolGroupId } from "../tool-permissions";
 import { registerToolAction, type ToolContext } from "./register";
 import { HTTPQL_HELP_SHORT, stringifyResult, validateHttpqlClause } from "./shared";
 
+const normalizeFilterClause = (clause: unknown): unknown => {
+    if (typeof clause === "string") return clause;
+    if (clause !== null && typeof clause === "object") {
+        const code = (clause as { code?: unknown }).code;
+        if (typeof code === "string") return code;
+    }
+    return clause;
+};
+
+const normalizeFilterPreset = (preset: unknown): unknown => {
+    if (preset === null || typeof preset !== "object") return preset;
+    return {
+        ...(preset as Record<string, unknown>),
+        clause: normalizeFilterClause((preset as { clause?: unknown }).clause),
+    };
+};
+
+const toGraphqlFilterInput = (input: { name: string; alias: string; clause: string }) => ({
+    name: input.name,
+    alias: input.alias,
+    clause: { HTTPQL: { code: input.clause } },
+});
+
 export const registerFilterTools = ({ server, sdk, store, permissions }: ToolContext) => {
     const idSchema = z.preprocess(
         (value) => (typeof value === "number" ? String(value) : value),
@@ -35,11 +58,24 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.filters.list",
         group: ToolGroupId.FilterSafe,
-        toolName: "list-filter-presets",
+        toolName: "list_filter_presets",
         description: "List saved HTTPQL filters. Example: {}.",
         inputSchema: listFilterPresetsSchema,
         handler: async () => {
             const response = await sdk.graphql.execute(LIST_FILTER_PRESETS_QUERY);
+            const data = response.data as { filterPresets?: unknown[] } | undefined;
+            if (data?.filterPresets !== undefined) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: stringifyResult({
+                                filterPresets: data.filterPresets.map(normalizeFilterPreset),
+                            }),
+                        },
+                    ],
+                };
+            }
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -49,7 +85,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.filters.get",
         group: ToolGroupId.FilterSafe,
-        toolName: "get-filter-preset",
+        toolName: "get_filter_preset",
         description: 'Get saved filters by ID. Example: { "ids": [1] }.',
         inputSchema: getFilterPresetSchema,
         handler: async (params) => {
@@ -57,6 +93,13 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
             const results = await Promise.all(
                 ids.map(async (id) => {
                     const response = await sdk.graphql.execute(GET_FILTER_PRESET_QUERY, { id });
+                    const data = response.data as { filterPreset?: unknown } | undefined;
+                    if (data?.filterPreset !== undefined) {
+                        return {
+                            id,
+                            result: { filterPreset: normalizeFilterPreset(data.filterPreset) },
+                        };
+                    }
                     return { id, result: response.data ?? response };
                 }),
             );
@@ -69,7 +112,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.filters.create",
         group: ToolGroupId.FilterSafe,
-        toolName: "create-filter-preset",
+        toolName: "create_filter_preset",
         description:
             "Create saved HTTPQL filters. " +
             'Example: { "items": [{ "name": "Posts", "alias": "posts", "clause": "req.method.eq:\\"POST\\"" }] }.' +
@@ -86,7 +129,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
                     }
                     const response = await sdk.graphql.execute<{
                         createFilterPreset?: { filter?: unknown; error?: unknown };
-                    }>(CREATE_FILTER_PRESET_MUTATION, { input: item });
+                    }>(CREATE_FILTER_PRESET_MUTATION, { input: toGraphqlFilterInput(item) });
                     const data = response.data;
                     const error = data?.createFilterPreset?.error ?? response.errors;
                     if (error !== undefined && error !== null) {
@@ -94,7 +137,10 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
                     }
                     return {
                         input: item,
-                        result: data?.createFilterPreset?.filter ?? response.data ?? response,
+                        result:
+                            normalizeFilterPreset(data?.createFilterPreset?.filter) ??
+                            response.data ??
+                            response,
                     };
                 }),
             );
@@ -107,7 +153,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.filters.update",
         group: ToolGroupId.FilterUnsafe,
-        toolName: "update-filter-preset",
+        toolName: "update_filter_preset",
         description:
             "Update a saved HTTPQL filter. " +
             'Example: { "id": 1, "input": { "name": "Posts", "alias": "posts", "clause": "req.method.eq:\\"POST\\"" } }.' +
@@ -129,7 +175,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
             }
             const response = await sdk.graphql.execute<{
                 updateFilterPreset?: { filter?: unknown; error?: unknown };
-            }>(UPDATE_FILTER_PRESET_MUTATION, { id, input });
+            }>(UPDATE_FILTER_PRESET_MUTATION, { id, input: toGraphqlFilterInput(input) });
             const data = response.data;
             const error = data?.updateFilterPreset?.error ?? response.errors;
             if (error !== undefined && error !== null) {
@@ -142,7 +188,9 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
                     {
                         type: "text",
                         text: stringifyResult(
-                            data?.updateFilterPreset?.filter ?? response.data ?? response,
+                            normalizeFilterPreset(data?.updateFilterPreset?.filter) ??
+                                response.data ??
+                                response,
                         ),
                     },
                 ],
@@ -153,7 +201,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.filters.delete",
         group: ToolGroupId.FilterUnsafe,
-        toolName: "delete-filter-preset",
+        toolName: "delete_filter_preset",
         description: 'Delete saved filters by ID. Example: { "ids": [1] }.',
         inputSchema: deleteFilterPresetSchema,
         handler: async (params) => {

@@ -5,36 +5,36 @@ export const runTamper = async (tools: Set<string>) => {
 
     logStep("Tamper");
 
-    await runIfTool("create-tamper-rule-collection", async () => {
+    await runIfTool("create_tamper_rule_collection", async () => {
         const nameA = `smoke-${Date.now()}`;
         const nameB = `smoke-${Date.now()}-b`;
-        await callTool("create-tamper-rule-collection", { items: [nameA, nameB] });
+        await callTool("create_tamper_rule_collection", { items: [nameA, nameB] });
 
-        const listRes = await callTool("list-tamper-rule-collections", {});
+        const listRes = await callTool("list_tamper_rule_collections", {});
         const listText = getToolText(listRes);
         const listJson = tryParseJSON<{
-            data?: { tamperRuleCollections?: { nodes?: Array<any> } };
-            tamperRuleCollections?: Array<any>;
+            data?: { tamper_rule_collections?: { nodes?: Array<any> } };
+            tamper_rule_collections?: Array<any>;
         }>(listText);
         const nodes =
-            listJson?.data?.tamperRuleCollections?.nodes ?? listJson?.tamperRuleCollections ?? [];
+            listJson?.data?.tamper_rule_collections?.nodes ?? listJson?.tamper_rule_collections ?? [];
         const collectionA = nodes.find((n) => n?.name === nameA);
         const collectionB = nodes.find((n) => n?.name === nameB);
         assert(collectionA?.id, "tamper collection A not found after create");
         assert(collectionB?.id, "tamper collection B not found after create");
 
-        await runIfTool("get-tamper-rule-collection", async () => {
-            await callTool("get-tamper-rule-collection", { ids: [Number(collectionA.id)] });
+        await runIfTool("get_tamper_rule_collection", async () => {
+            await callTool("get_tamper_rule_collection", { ids: [Number(collectionA.id)] });
         });
 
-        await runIfTool("rename-tamper-rule-collection", async () => {
-            await callTool("rename-tamper-rule-collection", {
+        await runIfTool("rename_tamper_rule_collection", async () => {
+            await callTool("rename_tamper_rule_collection", {
                 items: [{ id: Number(collectionA.id), name: `${nameA}-renamed` }],
             });
         });
 
         const ruleBase = {
-            collectionId: Number(collectionA.id),
+            collection_id: Number(collectionA.id),
             target: "request",
             part: "header",
             operation: "add",
@@ -46,8 +46,8 @@ export const runTamper = async (tools: Set<string>) => {
         let ruleId1: number | null = null;
         let ruleId2: number | null = null;
 
-        await runIfTool("create-tamper-rule", async () => {
-            const res = await callTool("create-tamper-rule", {
+        await runIfTool("create_tamper_rule", async () => {
+            const res = await callTool("create_tamper_rule", {
                 items: [
                     { name: "smoke-1", ...ruleBase },
                     { name: "smoke-2", ...ruleBase },
@@ -56,30 +56,30 @@ export const runTamper = async (tools: Set<string>) => {
             const text = getToolText(res);
             const parsed =
                 tryParseJSON<
-                    Array<{ result?: { createTamperRule?: { rule?: { id?: number | string } } } }>
+                    Array<{ result?: { create_tamper_rule?: { rule?: { id?: number | string } } } }>
                 >(text);
             ruleId1 =
-                parsed?.[0]?.result?.createTamperRule?.rule?.id != null
-                    ? Number(parsed[0].result.createTamperRule.rule.id)
+                parsed?.[0]?.result?.create_tamper_rule?.rule?.id != null
+                    ? Number(parsed[0].result.create_tamper_rule.rule.id)
                     : null;
             ruleId2 =
-                parsed?.[1]?.result?.createTamperRule?.rule?.id != null
-                    ? Number(parsed[1].result.createTamperRule.rule.id)
+                parsed?.[1]?.result?.create_tamper_rule?.rule?.id != null
+                    ? Number(parsed[1].result.create_tamper_rule.rule.id)
                     : null;
-            assert(ruleId1 && ruleId2, "tamper rule ids missing");
+            assert(ruleId1 !== null && ruleId2 !== null, "tamper rule ids missing");
         });
 
         if (ruleId1 && ruleId2) {
-            await runIfTool("list-tamper-rules", async () => {
-                await callTool("list-tamper-rules", {});
+            await runIfTool("list_tamper_rules", async () => {
+                await callTool("list_tamper_rules", {});
             });
 
-            await runIfTool("get-tamper-rule", async () => {
-                await callTool("get-tamper-rule", { ids: [ruleId1] });
+            await runIfTool("get_tamper_rule", async () => {
+                await callTool("get_tamper_rule", { ids: [ruleId1] });
             });
 
-            await runIfTool("update-tamper-rule", async () => {
-                await callTool("update-tamper-rule", {
+            await runIfTool("update_tamper_rule", async () => {
+                await callTool("update_tamper_rule", {
                     items: [
                         {
                             id: ruleId1,
@@ -95,38 +95,38 @@ export const runTamper = async (tools: Set<string>) => {
                 });
             });
 
-            await runIfTool("rename-tamper-rule", async () => {
-                await callTool("rename-tamper-rule", {
+            await runIfTool("rename_tamper_rule", async () => {
+                await callTool("rename_tamper_rule", {
                     items: [{ id: ruleId1, name: "smoke-1-r" }],
                 });
             });
 
-            await runIfTool("toggle-tamper-rule", async () => {
-                await callTool("toggle-tamper-rule", {
-                    ruleIds: [ruleId1],
+            await runIfTool("toggle_tamper_rule", async () => {
+                await callTool("toggle_tamper_rule", {
+                    rule_ids: [ruleId1],
                     enabled: true,
                 });
             });
 
-            await runIfTool("rank-tamper-rule", async () => {
-                await callTool("rank-tamper-rule", {
+            await runIfTool("rank_tamper_rule", async () => {
+                await callTool("rank_tamper_rule", {
                     id: ruleId2,
-                    input: { beforeId: ruleId1 },
+                    input: { before_id: ruleId1 },
                 });
             });
 
-            await runIfTool("move-tamper-rule", async () => {
-                await callTool("move-tamper-rule", {
-                    ruleIds: [ruleId1],
-                    collectionId: Number(collectionB.id),
+            await runIfTool("move_tamper_rule", async () => {
+                await callTool("move_tamper_rule", {
+                    rule_ids: [ruleId1],
+                    collection_id: Number(collectionB.id),
                 });
             });
 
-            await runIfTool("test-tamper-rule", async () => {
+            await runIfTool("test_tamper_rule", async () => {
                 const raw = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
                 const rawBase64 = Buffer.from(raw).toString("base64");
-                await callTool("test-tamper-rule", {
-                    rawBase64,
+                await callTool("test_tamper_rule", {
+                    raw_base64: rawBase64,
                     target: "request",
                     part: "header",
                     operation: "add",
@@ -135,19 +135,19 @@ export const runTamper = async (tools: Set<string>) => {
                 });
             });
 
-            await runIfTool("export-tamper", async () => {
-                await callTool("export-tamper", { collections: [Number(collectionA.id)] });
+            await runIfTool("export_tamper", async () => {
+                await callTool("export_tamper", { collections: [Number(collectionA.id)] });
             });
 
-            await runIfTool("delete-tamper-rule", async () => {
-                await callTool("delete-tamper-rule", {
-                    ruleIds: [ruleId1, ruleId2],
+            await runIfTool("delete_tamper_rule", async () => {
+                await callTool("delete_tamper_rule", {
+                    rule_ids: [ruleId1, ruleId2],
                 });
             });
         }
 
-        await runIfTool("delete-tamper-rule-collection", async () => {
-            await callTool("delete-tamper-rule-collection", {
+        await runIfTool("delete_tamper_rule_collection", async () => {
+            await callTool("delete_tamper_rule_collection", {
                 ids: [Number(collectionA.id), Number(collectionB.id)],
             });
         });

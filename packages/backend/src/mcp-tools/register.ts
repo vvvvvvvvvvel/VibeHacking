@@ -14,7 +14,15 @@ export type ToolContext = {
     sdk: MCPSDK;
     store: ConfirmActionStore;
     permissions: ToolPermissionsStore;
-    toolsByAction: Map<string, RegisteredTool>;
+};
+
+const toolActionRegistries = new WeakMap<McpServer, Map<string, RegisteredTool>>();
+
+export const attachToolActionRegistry = (
+    server: McpServer,
+    toolsByAction: Map<string, RegisteredTool>,
+) => {
+    toolActionRegistries.set(server, toolsByAction);
 };
 
 const executeAction = async (
@@ -83,7 +91,7 @@ export const registerToolAction = (
     };
     store.registerAction(config.action, config.handler);
     permissions.registerTool(config.action, config.group, config.toolName);
-    return server.registerTool(
+    const tool = server.registerTool(
         config.toolName,
         {
             description: config.description,
@@ -98,4 +106,6 @@ export const registerToolAction = (
             return await executeAction(sdk, store, permissions, payload);
         },
     );
+    toolActionRegistries.get(server)?.set(config.action, tool);
+    return tool;
 };
