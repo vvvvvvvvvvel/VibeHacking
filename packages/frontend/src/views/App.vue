@@ -137,6 +137,34 @@
 
                 <div v-if="!toolPermissions" class="tools-empty">Loading tool settings...</div>
                 <div v-else class="tools-list">
+                    <div class="tool-row tool-row--bulk">
+                        <div class="tool-info">
+                            <div class="tool-title">All groups</div>
+                            <div class="tool-meta">
+                                <span class="tool-tag">Applies to every group below</span>
+                            </div>
+                        </div>
+                        <div class="tool-controls">
+                            <details class="tool-dropdown" :class="{ busy: bulkBusy }">
+                                <summary class="tool-dropdown__summary">
+                                    <span>{{ bulkLabel }}</span>
+                                    <span class="tool-dropdown__chevron" aria-hidden="true">▾</span>
+                                </summary>
+                                <div class="tool-dropdown__menu" role="listbox">
+                                    <button
+                                        v-for="option in toolModeOptions"
+                                        :key="option.value"
+                                        type="button"
+                                        class="tool-dropdown__option"
+                                        :class="{ active: bulkMode === option.value }"
+                                        @click="onBulkModeSelect(option.value, $event)"
+                                    >
+                                        {{ option.label }}
+                                    </button>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
                     <div v-for="group in toolPermissions.groups" :key="group.id" class="tool-row">
                         <div class="tool-info">
                             <div class="tool-title">{{ group.label }}</div>
@@ -237,16 +265,26 @@ const { sdk } = defineProps<{
 const settings = ref<McpSettings | undefined>(undefined);
 const toolPermissions = ref<ToolPermissions | undefined>(undefined);
 const toolBusy = ref<Record<string, boolean>>({});
+const bulkBusy = ref(false);
 const enabled = ref(false);
 const loading = ref(true);
 const busy = ref(false);
 const draftHost = ref("");
 const draftPort = ref<number | undefined>(undefined);
-const toolModeOptions: { value: ToolGroupMode; label: string }[] = [
+type ToolModeChoice = ToolGroupMode | "auto-start";
+const toolModeOptions: { value: ToolModeChoice; label: string }[] = [
     { value: "auto", label: "Auto run" },
+    { value: "auto-start", label: "Auto run + start" },
     { value: "confirm", label: "Ask to confirm" },
     { value: "disabled", label: "Disabled" },
 ];
+
+const resolveModeChoice = (
+    choice: ToolModeChoice,
+): { mode: ToolGroupMode; startServer: boolean } => {
+    if (choice === "auto-start") return { mode: "auto", startServer: true };
+    return { mode: choice, startServer: false };
+};
 
 const isLocked = computed(() => loading.value || busy.value);
 
@@ -300,17 +338,72 @@ const fetchToolPermissions = async () => {
     }
 };
 
-const onToolModeSelect = (groupId: string, mode: ToolGroupMode, event: Event) => {
+const onToolModeSelect = (groupId: string, choice: ToolModeChoice, event: Event) => {
     const target = event.currentTarget;
     if (target instanceof HTMLElement) {
         const details = target.closest("details");
         if (details) details.removeAttribute("open");
     }
+    const { mode, startServer } = resolveModeChoice(choice);
     void updateToolGroupMode(groupId, mode);
+    if (startServer && !enabled.value) void onToggle(true);
 };
 
-const modeLabel = (mode: ToolGroupMode) =>
+const modeLabel = (mode: ToolModeChoice) =>
     toolModeOptions.find((option) => option.value === mode)?.label ?? "Ask to confirm";
+
+const bulkMode = computed<ToolGroupMode | undefined>(() => {
+    const perms = toolPermissions.value;
+    if (!perms || perms.groups.length === 0) return undefined;
+    const first = perms.states[perms.groups[0].id] ?? "confirm";
+    const allSame = perms.groups.every(
+        (group) => (perms.states[group.id] ?? "confirm") === first,
+    );
+    return allSame ? first : undefined;
+});
+
+const bulkLabel = computed(() => {
+    const mode = bulkMode.value;
+    if (mode === undefined) return "Mixed";
+    return modeLabel(mode);
+});
+
+const onBulkModeSelect = (choice: ToolModeChoice, event: Event) => {
+    const target = event.currentTarget;
+    if (target instanceof HTMLElement) {
+        const details = target.closest("details");
+        if (details) details.removeAttribute("open");
+    }
+    const { mode, startServer } = resolveModeChoice(choice);
+    void applyBulkMode(mode);
+    if (startServer && !enabled.value) void onToggle(true);
+};
+
+const applyBulkMode = async (mode: ToolGroupMode) => {
+    const perms = toolPermissions.value;
+    if (!perms || bulkBusy.value) return;
+    bulkBusy.value = true;
+    const groupIds = perms.groups.map((group) => group.id);
+    const nextBusy = { ...toolBusy.value };
+    for (const id of groupIds) nextBusy[id] = true;
+    toolBusy.value = nextBusy;
+    try {
+        let latest: ToolPermissions | undefined;
+        for (const id of groupIds) {
+            latest = await sdk.backend.setToolGroupMode(id, mode);
+        }
+        if (latest) toolPermissions.value = latest;
+    } catch (err) {
+        sdk.window.showToast(`Failed to update tool groups.\n${err}`, {
+            variant: "error",
+        });
+    } finally {
+        const clearedBusy = { ...toolBusy.value };
+        for (const id of groupIds) clearedBusy[id] = false;
+        toolBusy.value = clearedBusy;
+        bulkBusy.value = false;
+    }
+};
 
 const updateToolGroupMode = async (groupId: string, mode: ToolGroupMode) => {
     toolBusy.value = { ...toolBusy.value, [groupId]: true };
