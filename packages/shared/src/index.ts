@@ -54,4 +54,4 @@ export const MCP_DEFAULT_HOST = "127.0.0.1";
 export const MCP_DEFAULT_PORT = 3333;
 export const MCP_ENDPOINT_PATH = "/mcp";
 export const MCP_CONTROL_ENDPOINT_PATH = "/control";
-export const MCP_PLUGIN_VERSION = "0.1.6";
+export const MCP_PLUGIN_VERSION = "2.0.0";
