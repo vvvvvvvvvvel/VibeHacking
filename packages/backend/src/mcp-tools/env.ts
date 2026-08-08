@@ -96,8 +96,8 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         group: ToolGroupId.EnvSafe,
         toolName: "set_environment_variable",
         description:
-            "Set one variable in the global, selected, or named environment (overwrites existing; defaults to global). " +
-            'Example: { "name": "FOO", "value": "bar", "secret": false, "global": false }.',
+            "Set one variable in the selected, global, or named environment (overwrites existing; defaults to the selected environment). " +
+            'Set global=true to write the global environment. Example: { "name": "FOO", "value": "bar", "secret": false, "global": false }.',
         inputSchema: envSetVarSchema,
         handler: async (params) => {
             const input = params as {
@@ -111,7 +111,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
                 name: input.name,
                 value: input.value,
                 secret: input.secret ?? false,
-                global: input.global ?? true,
+                global: input.global ?? false,
                 env: input.env,
             });
             return { content: [{ type: "text", text: "ok" }] };

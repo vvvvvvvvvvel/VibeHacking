@@ -27,7 +27,6 @@ export enum ToolGroupId {
     TamperSafe = "tamper-safe",
     TamperUnsafe = "tamper-unsafe",
     WsSafe = "ws-safe",
-    HelpSafe = "help-safe",
 }
 
 type ToolGroupSeed = ToolGroup & { defaultMode: ToolGroupMode };
@@ -74,11 +73,10 @@ const BASE_GROUPS: ToolGroupSeed[] = [
         defaultMode: "confirm",
     },
     { id: ToolGroupId.WsSafe, label: "WS History", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.HelpSafe, label: "Help", tools: [], defaultMode: "auto" },
 ];
 
 const DEFAULT_MODE: ToolGroupMode = "confirm";
-const HIDDEN_GROUP_IDS = new Set<string>([ToolGroupId.HelpSafe]);
+const HIDDEN_GROUP_IDS = new Set<string>([]);
 
 const createBaseGroups = (): ToolGroup[] =>
     BASE_GROUPS.map(({ id, label, tools }) => ({

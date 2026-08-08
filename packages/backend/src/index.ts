@@ -9,7 +9,7 @@ export function init(sdk: MCPSDK) {
         return await mcp.initializeMcpServer();
     });
     sdk.api.register("getMcpServerSettings", () => {
-        return mcp.getMcpServerSettings();
+        return Promise.resolve(mcp.getMcpServerSettings());
     });
     sdk.api.register("setMcpServerEnabled", async (_sdk: MCPSDK, enabled: boolean) => {
         return await mcp.setMcpServerEnabled(enabled);
@@ -21,7 +21,7 @@ export function init(sdk: MCPSDK) {
         },
     );
     sdk.api.register("getToolGroupPermissionModes", () => {
-        return mcp.getToolGroupPermissionModes();
+        return Promise.resolve(mcp.getToolGroupPermissionModes());
     });
     sdk.api.register(
         "setToolGroupPermissionMode",

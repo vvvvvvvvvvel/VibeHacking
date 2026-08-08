@@ -5,7 +5,7 @@ import {
     CREATE_TAMPER_RULE_MUTATION,
     DELETE_TAMPER_RULE_COLLECTION_MUTATION,
     DELETE_TAMPER_RULE_MUTATION,
-    EXPORT_TAMPER_WITH_TARGET_MUTATION,
+    EXPORT_TAMPER_MUTATION,
     GET_TAMPER_RULE_COLLECTION_QUERY,
     GET_TAMPER_RULE_QUERY,
     LIST_TAMPER_RULE_COLLECTIONS_QUERY,
@@ -339,28 +339,6 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             );
             return {
                 content: [{ type: "text", text: stringifyResult(results) }],
-            };
-        },
-    });
-
-    registerToolAction(server, sdk, store, permissions, {
-        action: "sdk.tamper.listRules",
-        group: ToolGroupId.TamperSafe,
-        toolName: "list_tamper_rules",
-        description:
-            "List Tamper rule collections with their rules (same as list_tamper_rule_collections).",
-        inputSchema: emptySchema,
-        handler: async () => {
-            const response = await sdk.graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
-            return {
-                content: [
-                    {
-                        type: "text",
-                        text: stringifyResult(
-                            normalizeTamperResult(extractGraphqlResult(response)),
-                        ),
-                    },
-                ],
             };
         },
     });
@@ -716,7 +694,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                         .filter((id) => id !== undefined && id !== null),
                 };
             }
-            const response = await sdk.graphql.execute(EXPORT_TAMPER_WITH_TARGET_MUTATION, {
+            const response = await sdk.graphql.execute(EXPORT_TAMPER_MUTATION, {
                 input: { target },
             });
             return {

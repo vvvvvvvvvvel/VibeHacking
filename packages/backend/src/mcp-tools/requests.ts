@@ -1,3 +1,6 @@
+import { Buffer } from "buffer";
+
+import { RequestSpecRaw } from "caido:utils";
 import type { RequestOrderField, ResponseOrderField } from "caido:utils";
 import { z } from "zod";
 
@@ -25,6 +28,7 @@ import { ToolGroupId } from "../tool-permissions";
 import { httpSerializationSchema, listHttpSerializationSchema } from "./http-serialization-schema";
 import { registerToolAction, type ToolContext } from "./register";
 import {
+    ciEnum,
     HTTPQL_HELP_SHORT,
     stringifyResult,
     toCursor,
@@ -91,14 +95,14 @@ const orderSchema = z.preprocess(
                         "created_at",
                         "source",
                     ]),
-                    direction: z.enum(["asc", "desc"]).default("asc"),
+                    direction: ciEnum(["asc", "desc"]).default("asc"),
                 })
                 .strict(),
             z
                 .object({
                     target: z.literal("resp"),
                     field: z.enum(["length", "roundtrip", "code"]),
-                    direction: z.enum(["asc", "desc"]).default("asc"),
+                    direction: ciEnum(["asc", "desc"]).default("asc"),
                 })
                 .strict(),
         ])
@@ -110,7 +114,7 @@ const listRequestsSchema = z
         filter: z.string().min(1).optional(),
         limit: z.number().int().min(1).max(500).default(50),
         cursor: z.string().min(1).optional(),
-        direction: z.enum(["after", "before"]).default("after"),
+        direction: ciEnum(["after", "before"]).default("after"),
         order: orderSchema,
         serialization: listHttpSerializationSchema,
         fields: z
@@ -176,6 +180,23 @@ const sendRequestsSchema = z
     })
     .strict();
 
+const sendRawRequestItemSchema = z
+    .object({
+        raw_base64: z.string().min(1),
+        host: z.string().min(1),
+        port: z.number().int().min(1).max(65535),
+        is_tls: z.boolean().optional(),
+    })
+    .strict();
+
+const sendRawRequestsSchema = z
+    .object({
+        items: z.array(sendRawRequestItemSchema).min(1),
+        options: sendRequestOptionsSchema.nullable().optional(),
+        serialization: httpSerializationSchema,
+    })
+    .strict();
+
 const scopeCheckSchema = z
     .object({
         items: z
@@ -195,7 +216,7 @@ const summarySchema = z
     .object({
         limit: z.number().int().min(1).max(500).default(50),
         cursor: z.string().min(1).optional(),
-        direction: z.enum(["after", "before"]).default("after"),
+        direction: ciEnum(["after", "before"]).default("after"),
         order: orderSchema,
         filter: z.string().min(1).optional(),
     })
@@ -450,6 +471,57 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
                     results.push({
                         ok: false,
                         id,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            }
+            return { content: [{ type: "text", text: stringifyResult({ results }) }] };
+        },
+    });
+
+    registerToolAction(server, sdk, store, permissions, {
+        action: "sdk.requests.sendRaw",
+        group: ToolGroupId.RequestUnsafe,
+        toolName: "send_raw_requests",
+        description:
+            "Send crafted raw HTTP requests directly to a target, without first saving them. " +
+            "raw_base64 is the base64-encoded raw HTTP request; host/port/is_tls set the connection. " +
+            "Returns the live response. The request is not added to Proxy history unless options.save is true. " +
+            'Example: { "items": [{ "raw_base64": "<base64>", "host": "example.com", "port": 443, "is_tls": true }], "options": { "save": true } }.',
+        inputSchema: sendRawRequestsSchema,
+        handler: async (params) => {
+            const input = sendRawRequestsSchema.parse(params);
+            const includeBody = input.serialization?.include_body !== false;
+            const serialization = normalizeHttpSerialization(input.serialization, {
+                includeHeaders: true,
+                includeRequestBody: includeBody,
+                includeResponseBody: includeBody,
+                includeRawRequest: false,
+                includeRawResponse: false,
+            });
+            const results = [];
+            for (const [index, item] of input.items.entries()) {
+                try {
+                    const isTls = item.is_tls ?? item.port === 443;
+                    const scheme = isTls ? "https" : "http";
+                    const spec = new RequestSpecRaw(`${scheme}://${item.host}:${item.port}`);
+                    spec.setHost(item.host);
+                    spec.setPort(item.port);
+                    spec.setTls(isTls);
+                    spec.setRaw(Buffer.from(item.raw_base64, "base64"));
+                    const sent = await sdk.requests.send(spec, input.options ?? {});
+                    results.push({
+                        ok: true,
+                        index,
+                        result: {
+                            sentRequestId: String(sent.request.getId()),
+                            response: serializeHttpResponse(sent.response, serialization),
+                        },
+                    });
+                } catch (error) {
+                    results.push({
+                        ok: false,
+                        index,
                         error: error instanceof Error ? error.message : String(error),
                     });
                 }

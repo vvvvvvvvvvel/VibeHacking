@@ -22,7 +22,7 @@ import { ToolGroupId } from "../tool-permissions";
 
 import { listHttpSerializationSchema } from "./http-serialization-schema";
 import { registerToolAction, type ToolContext } from "./register";
-import { stringifyResult, toDedupeKey, toId, toNumericId } from "./shared";
+import { ciEnum, stringifyResult, toDedupeKey, toId, toNumericId } from "./shared";
 
 type FindingNode = {
     id: string;
@@ -175,10 +175,10 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
         .strict();
     const findingOrderSchema = z
         .object({
-            by: z
-                .enum(["ID", "TITLE", "HOST", "PATH", "REPORTER", "CREATED_AT"])
-                .default("CREATED_AT"),
-            ordering: z.enum(["ASC", "DESC"]).default("DESC"),
+            by: ciEnum(["ID", "TITLE", "HOST", "PATH", "REPORTER", "CREATED_AT"]).default(
+                "CREATED_AT",
+            ),
+            ordering: ciEnum(["ASC", "DESC"]).default("DESC"),
         })
         .strict()
         .default({ by: "CREATED_AT", ordering: "DESC" });
@@ -190,7 +190,7 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
                 .transform((value) => value ?? undefined),
             limit: z.number().int().min(1).max(500).default(50),
             cursor: z.string().min(1).optional(),
-            direction: z.enum(["after", "before"]).default("after"),
+            direction: ciEnum(["after", "before"]).default("after"),
             order: findingOrderSchema,
             include_http: z.boolean().default(false),
             serialization: listHttpSerializationSchema,

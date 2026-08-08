@@ -22,12 +22,12 @@ export const runFilters = async (tools: Set<string>) => {
         assert(created?.id, "filter preset not found after create");
 
         await runIfTool("get_filter_preset", async () => {
-            await callTool("get_filter_preset", { ids: [Number(created.id)] });
+            await callTool("get_filter_preset", { ids: [created.id] });
         });
 
         await runIfTool("update_filter_preset", async () => {
             await callTool("update_filter_preset", {
-                id: Number(created.id),
+                id: created.id,
                 input: {
                     name: `${name}-updated`,
                     alias,
@@ -37,7 +37,7 @@ export const runFilters = async (tools: Set<string>) => {
         });
 
         await runIfTool("delete_filter_preset", async () => {
-            await callTool("delete_filter_preset", { ids: [Number(created.id)] });
+            await callTool("delete_filter_preset", { ids: [created.id] });
         });
     });
 };

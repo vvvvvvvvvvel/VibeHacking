@@ -51,6 +51,7 @@ and `setAllToolGroupPermissionModes`.
 ## Tooling Notes
 
 - Some tools accept arrays even when the name is singular — this is intentional to support batch operations while keeping UI labels simple.
+- Discovery tools are not scope-limited by default: `list_requests` returns all traffic (annotating `in_scope`), and Sitemap/WebSocket lists only filter by scope when an explicit `scope_id` is passed. Since Caido scopes are often broad (e.g. `.+`), narrow by host with HTTPQL (`req.host.eq` / `req.host.regex`) instead.
 - Broad history discovery should start with `list_requests` / `list_websocket_messages` and tight `fields`; exact follow-up should use `get_requests_by_ids` / `get_websocket_messages_by_ids`.
 - `list_requests` uses native Caido cursor pagination; feed `page_info.end_cursor`/`start_cursor` back as `cursor`.
 - `list_requests.filter` is a raw HTTPQL string for method, host, status, port, time, path, raw, and row constraints.
@@ -71,6 +72,7 @@ Request history:
 - `get_requests_by_ids`
 - `match_requests`
 - `send_requests`
+- `send_raw_requests`
 - `check_requests_scope`
 - `summarize_request_cookies`
 - `summarize_request_auth_headers`
@@ -103,7 +105,7 @@ Environment:
 - `list_environment_variables`
 - `set_environment_variable`
 
-Other existing groups cover Replay, Tamper rules, scopes, findings, hosted files, project/runtime info, and HTTPQL help.
+Other existing groups cover Replay, Tamper rules, scopes, findings, hosted files, and project/runtime info.
 
 Example request discovery:
 

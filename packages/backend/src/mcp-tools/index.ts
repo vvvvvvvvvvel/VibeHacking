@@ -9,7 +9,6 @@ import { registerEnvTools } from "./env";
 import { registerFilterTools } from "./filters";
 import { registerFindingsTools } from "./findings";
 import { registerHostedFileTools } from "./hosted-file";
-import { registerHttpqlTools } from "./httpql";
 import { registerProjectTools } from "./projects";
 import { attachToolActionRegistry, type ToolContext } from "./register";
 import { registerReplayTools } from "./replay";
@@ -43,7 +42,6 @@ export function registerMcpTools(
     registerFilterTools(ctx);
     registerTamperTools(ctx);
     registerWebsocketTools(ctx);
-    registerHttpqlTools(ctx);
 
     return { toolsByAction };
 }

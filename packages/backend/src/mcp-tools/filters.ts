@@ -29,10 +29,16 @@ const normalizeFilterPreset = (preset: unknown): unknown => {
     };
 };
 
-const toGraphqlFilterInput = (input: { name: string; alias: string; clause: string }) => ({
+const toGraphqlFilterInput = (input: {
+    name: string;
+    alias: string;
+    clause: string;
+    global: boolean;
+}) => ({
     name: input.name,
     alias: input.alias,
     clause: { HTTPQL: { code: input.clause } },
+    global: input.global,
 });
 
 export const registerFilterTools = ({ server, sdk, store, permissions }: ToolContext) => {
@@ -45,6 +51,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
             name: z.string().min(1),
             alias: z.string().min(1),
             clause: z.string().min(1),
+            global: z.boolean().default(false),
         })
         .strict();
     const listFilterPresetsSchema = z.object({}).strict();
@@ -114,7 +121,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
         group: ToolGroupId.FilterSafe,
         toolName: "create_filter_preset",
         description:
-            "Create saved HTTPQL filters. " +
+            "Create saved HTTPQL filters. global defaults to false (project-local); set true for a global preset. " +
             'Example: { "items": [{ "name": "Posts", "alias": "posts", "clause": "req.method.eq:\\"POST\\"" }] }.' +
             "\n\n" +
             HTTPQL_HELP_SHORT,

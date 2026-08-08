@@ -12,6 +12,7 @@
         "watch": "pnpm exec caido-dev watch .",
         "format": "prettier --write .",
         "smoke": "pnpm dlx tsx scripts/mcp-smoke/index.ts",
+        "smoke:integration": "pnpm dlx tsx scripts/mcp-smoke/integration.ts",
         "release:tag": "node -p \"require('./package.json').version\" | xargs -I{} sh -c 'git tag v{} && git push origin v{}'"
     },
     "keywords": [
@@ -21,9 +22,9 @@
     "author": "vvvvvvvvvvel",
     "license": "MIT",
     "devDependencies": {
-        "@caido-community/dev": "^0.1.6",
+        "@caido-community/dev": "^0.1.7",
         "@caido/eslint-config": "^0.8.0",
-        "@vitejs/plugin-vue": "^6.0.4",
+        "@vitejs/plugin-vue": "^6.0.8",
         "@types/node": "^20.19.11",
         "autoprefixer": "^10.4.24",
         "eslint": "^9.39.2",

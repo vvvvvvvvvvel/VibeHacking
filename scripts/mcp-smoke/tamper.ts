@@ -72,8 +72,8 @@ export const runTamper = async (tools: Set<string>) => {
         });
 
         if (ruleId1 && ruleId2) {
-            await runIfTool("list_tamper_rules", async () => {
-                await callTool("list_tamper_rules", {});
+            await runIfTool("list_tamper_rule_collections", async () => {
+                await callTool("list_tamper_rule_collections", {});
             });
 
             await runIfTool("get_tamper_rule", async () => {

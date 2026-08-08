@@ -28,7 +28,7 @@ import type {
 import { ToolGroupId } from "../tool-permissions";
 
 import { registerToolAction, type ToolContext } from "./register";
-import { stringifyResult, toNumericId } from "./shared";
+import { ciEnum, stringifyResult, toNumericId } from "./shared";
 
 type StreamNode = {
     id: string;
@@ -124,7 +124,7 @@ const idArraySchema = z.array(idSchema).min(1);
 const wsOrderSchema = z
     .object({
         by: z.enum(["ID"]).default("ID"),
-        ordering: z.enum(["ASC", "DESC"]).default("DESC"),
+        ordering: ciEnum(["ASC", "DESC"]).default("DESC"),
     })
     .strict()
     .default({ by: "ID", ordering: "DESC" });
@@ -132,7 +132,7 @@ const wsOrderSchema = z
 const cursorPaginationSchema = z.object({
     limit: z.number().int().min(1).max(500).default(50),
     cursor: z.string().min(1).optional(),
-    direction: z.enum(["after", "before"]).default("after"),
+    direction: ciEnum(["after", "before"]).default("after"),
 });
 
 const defaultWebSocketSerialization = {
@@ -165,8 +165,8 @@ const websocketSerializationSchema = z
 const listStreamsSchema = z
     .object({
         ...cursorPaginationSchema.shape,
-        protocol: z.enum(["WS", "SSE"]).default("WS"),
-        stream_direction: z.enum(["BOTH", "CLIENT", "SERVER"]).optional(),
+        protocol: ciEnum(["WS", "SSE"]).default("WS"),
+        stream_direction: ciEnum(["BOTH", "CLIENT", "SERVER"]).optional(),
         scope_id: idSchema.nullable().default(null),
         order: wsOrderSchema,
     })
@@ -296,7 +296,6 @@ const queryWebSocketStreams = async (
 ) => {
     const response = await sdk.graphql.execute<StreamsResponse>(LIST_STREAMS_QUERY, {
         ...cursorVariables(input),
-        protocol: input.protocol,
         scopeId: input.scope_id ?? undefined,
         order: input.order,
     });
@@ -314,6 +313,8 @@ const queryWebSocketStreams = async (
                 const stream = normalizeStream(edge.node);
                 return stream === undefined ? null : { cursor: edge.cursor, ...stream };
             })
+            // The `streams` query no longer accepts a protocol argument; filter client-side.
+            .filter((item) => item === null || item.protocol === input.protocol)
             .filter((item) =>
                 item === null || input.stream_direction === undefined
                     ? true

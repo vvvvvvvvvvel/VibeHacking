@@ -1,11 +1,27 @@
 import { Buffer } from "buffer";
 
 import type { Cursor, DedupeKey, ID, Request, Response } from "caido:utils";
+import { z } from "zod";
 
 export type ActionPayload = {
     action: string;
     params: Record<string, unknown>;
 };
+
+/**
+ * Case-insensitive enum: accepts any casing the agent sends (e.g. "desc", "DESC", "Desc")
+ * and normalizes it to the canonical value. Only broadens accepted input; never rejects a
+ * value the strict enum would have accepted.
+ */
+export const ciEnum = <const T extends readonly [string, ...string[]]>(values: T) =>
+    z.preprocess(
+        (value) =>
+            typeof value === "string"
+                ? (values.find((candidate) => candidate.toLowerCase() === value.toLowerCase()) ??
+                  value)
+                : value,
+        z.enum(values),
+    );
 
 export type ToolResult = {
     content: { type: "text"; text: string }[];
@@ -16,24 +32,7 @@ export const HTTPQL_HELP_SHORT = [
     'req.method.eq:"POST"',
     'req.path.cont:"/api/" AND (req.method.eq:"POST" OR req.method.eq:"PUT")',
     "resp.code.eq:200",
-    "Use tool: get_httpql_help for more.",
-].join("\n");
-
-export const HTTPQL_HELP_PROMPT = [
-    HTTPQL_HELP_SHORT,
-    "",
-    "Syntax notes:",
-    "Use req.* for request fields, resp.* for response fields, and row.* for table rows.",
-    "Combine clauses with AND / OR and parentheses.",
-    "req fields: ext (file extension, includes dot), host, method, path, port, raw, created_at.",
-    "resp fields: code, raw, roundtrip (ms), ext.",
-    "row fields: id.",
-    "Operators: eq/ne for exact match; cont/ncont for contains; gt/gte/lt/lte for numbers/dates; regex/nregex for text.",
-    "Notes: cont/ncont are case-insensitive; LIKE supports % and _. Some regex features are unsupported.",
-    "created_at formats: RFC3339, ISO 8601, RFC2822, RFC7231, ISO9075.",
-    'Example: req.host.eq:"example.com" AND (req.path.cont:"/api/" OR req.created_at.gt:"2025-02-02T01:02:03+00:00")',
-    "Docs: https://docs.caido.io/reference/httpql",
-    "Guide: https://docs.caido.io/app/guides/filters_httpql",
+    "See the caido-mcp skill (HTTPQL Reference) for full syntax.",
 ].join("\n");
 
 type HttpqlQueryChain = {
@@ -281,8 +280,6 @@ const nullKeys = new Set([
     "body_base64",
     "match_context",
     "mime_type",
-    "query",
-    "response",
     "raw_base64",
     "edited_payload",
     "raw_utf8",

@@ -276,16 +276,8 @@ export const runReplay = async (tools: Set<string>) => {
 
     await runIfTool("start_replay_task", async () => {
         assert(sessionId !== null, "no session for start_replay_task");
-        const raw = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
-        const rawBase64 = Buffer.from(raw).toString("base64");
         const res = await callTool("start_replay_task", {
-            items: [
-                {
-                    session_id: sessionId,
-                    raw_base64: rawBase64,
-                    connection: { host: "127.0.0.1", port: 80, is_tls: false },
-                },
-            ],
+            session_ids: [sessionId],
         });
         if (!entryId) {
             const text = getToolText(res);

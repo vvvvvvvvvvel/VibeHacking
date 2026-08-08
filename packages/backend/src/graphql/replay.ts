@@ -63,20 +63,24 @@ export const LIST_REPLAY_COLLECTIONS_DETAILED_QUERY = `
         sessions {
           id
           name
-          activeEntry {
-            id
-          }
-          entries {
-            count {
-              value
-            }
-            nodes {
+          ... on ReplaySessionHttp {
+            activeEntry {
               id
-              error
-              createdAt
-              raw
-              request {
+            }
+            entries {
+              count {
+                value
+              }
+              nodes {
                 id
+                error
+                createdAt
+                ... on ReplayEntryHttp {
+                  raw
+                  request {
+                    id
+                  }
+                }
               }
             }
           }
@@ -98,9 +102,11 @@ export const LIST_REPLAY_SESSIONS_QUERY = `
       nodes {
         id
         name
-        collection {
-          id
-          name
+        ... on ReplaySessionHttp {
+          collection {
+            id
+            name
+          }
         }
       }
     }
@@ -112,9 +118,11 @@ export const GET_REPLAY_SESSION_QUERY = `
     replaySession(id: $id) {
       id
       name
-      collection {
-        id
-        name
+      ... on ReplaySessionHttp {
+        collection {
+          id
+          name
+        }
       }
     }
   }
@@ -125,27 +133,29 @@ export const GET_REPLAY_ENTRY_QUERY = `
     replayEntry(id: $id) {
       id
       error
-      raw
-      connection {
-        host
-        port
-        isTLS
-        SNI
-      }
       session {
         id
       }
-      request {
-        id
-        host
-        port
-        path
-        query
-        method
-        createdAt
-        response {
+      ... on ReplayEntryHttp {
+        raw
+        connection {
+          host
+          port
+          isTLS
+          SNI
+        }
+        request {
           id
-          statusCode
+          host
+          port
+          path
+          query
+          method
+          createdAt
+          response {
+            id
+            statusCode
+          }
         }
       }
     }
@@ -158,9 +168,11 @@ export const MOVE_REPLAY_SESSION_MUTATION = `
       session {
         id
         name
-        collection {
-          id
-          name
+        ... on ReplaySessionHttp {
+          collection {
+            id
+            name
+          }
         }
       }
     }
@@ -168,15 +180,19 @@ export const MOVE_REPLAY_SESSION_MUTATION = `
 `;
 
 export const START_REPLAY_TASK_MUTATION = `
-  mutation startReplayTask($sessionId: ID!, $input: StartReplayTaskInput!) {
-    startReplayTask(sessionId: $sessionId, input: $input) {
+  mutation startReplayTask($sessionId: ID!) {
+    startReplayTask(sessionId: $sessionId) {
       task {
         id
         createdAt
+        sessionKind
         replayEntry {
           id
           session { id }
         }
+      }
+      error {
+        __typename
       }
     }
   }

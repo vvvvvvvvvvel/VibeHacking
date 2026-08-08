@@ -32,8 +32,8 @@ const STREAM_WS_MESSAGE_FIELDS = `
 `;
 
 export const LIST_STREAMS_QUERY = `
-  query streams($first: Int, $after: String, $last: Int, $before: String, $protocol: StreamProtocol!, $order: StreamOrderInput, $scopeId: ID) {
-    streams(first: $first, after: $after, last: $last, before: $before, protocol: $protocol, order: $order, scopeId: $scopeId) {
+  query streams($first: Int, $after: String, $last: Int, $before: String, $order: StreamOrderInput, $scopeId: ID) {
+    streams(first: $first, after: $after, last: $last, before: $before, order: $order, scopeId: $scopeId) {
       pageInfo {
         hasPreviousPage
         hasNextPage

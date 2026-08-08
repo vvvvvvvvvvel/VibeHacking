@@ -143,8 +143,10 @@ type StartReplayTaskResponse = {
         task?: {
             id: string;
             createdAt: string;
+            sessionKind?: string;
             replayEntry?: { id: string; session?: { id: string } };
         };
+        error?: { __typename?: string };
     };
 };
 
@@ -249,7 +251,7 @@ const sendToReplaySchema = z
 const sendToReplayFromFilterSchema = z
     .object({
         filter: z.string().min(1),
-        limit: z.number().int().min(1).max(500).optional(),
+        limit: z.number().int().min(1).max(500).default(100),
         collection_id: optionalIdSchema,
         collection_name: optionalNameSchema,
         session_name: optionalNameSchema,
@@ -261,48 +263,11 @@ const sendToReplayFromFilterSchema = z
         "Provide collection_id or collection_name",
     );
 
-const startReplayTaskItemSchema = z
+const startReplayTaskSchema = z
     .object({
-        session_id: idSchema,
-        raw_base64: z.string().min(1),
-        connection: z.object({
-            host: z.string().min(1),
-            port: z.number().int().min(1),
-            is_tls: z.boolean(),
-            sni: z.string().min(1).optional(),
-        }),
-        settings: z
-            .object({
-                placeholders: z.array(z.unknown()),
-                update_content_length: z.boolean(),
-                connection_close: z.boolean(),
-            })
-            .optional(),
+        session_ids: z.array(idSchema).min(1),
     })
     .strict();
-
-const startReplayTaskSchema = z.union([
-    z.object({ items: z.array(startReplayTaskItemSchema).min(1) }).strict(),
-    z
-        .object({
-            session_ids: z.array(idSchema).min(1),
-            raw_base64: z.string().min(1),
-            connection: z.object({
-                host: z.string().min(1),
-                port: z.number().int().min(1),
-                is_tls: z.boolean(),
-                sni: z.string().min(1).optional(),
-            }),
-            settings: z
-                .object({
-                    placeholders: z.array(z.unknown()),
-                    update_content_length: z.boolean(),
-                    connection_close: z.boolean(),
-                })
-                .optional(),
-        })
-        .strict(),
-]);
 
 const decodeRawBase64 = (rawBase64: string | undefined) => {
     if (rawBase64 === undefined || rawBase64 === "") return undefined;
@@ -322,31 +287,6 @@ const toSerializationOptions = (
               includeBody: input.include_body,
               includeBinary: input.include_binary,
               maxBinaryBytes: input.max_binary_bytes,
-          };
-
-const toReplayConnection = (connection: {
-    host: string;
-    port: number;
-    is_tls: boolean;
-    sni?: string;
-}) => ({
-    host: connection.host,
-    port: connection.port,
-    isTLS: connection.is_tls,
-    SNI: connection.sni,
-});
-
-const toReplaySettings = (settings?: {
-    placeholders: unknown[];
-    update_content_length: boolean;
-    connection_close: boolean;
-}) =>
-    settings === undefined
-        ? undefined
-        : {
-              placeholders: settings.placeholders,
-              updateContentLength: settings.update_content_length,
-              connectionClose: settings.connection_close,
           };
 
 export const registerReplayTools = ({ server, sdk, store, permissions }: ToolContext) => {
@@ -856,6 +796,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         toolName: "send_to_replay_from_filter",
         description:
             "Create Replay sessions from requests matched by an HTTPQL filter. " +
+            "Matches are capped by limit (default 100, max 500). " +
             'Example: { "filter": "req.method.eq:\\"POST\\"", "collection_name": "My Collection" }.' +
             "\n\n" +
             HTTPQL_HELP_SHORT,
@@ -875,8 +816,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                     content: [{ type: "text", text: stringifyResult({ error: validationError }) }],
                 };
             }
-            let query = sdk.requests.query().filter(filter);
-            if (limit !== undefined) query = query.first(limit);
+            const query = sdk.requests.query().filter(filter).first(limit);
             const result = await query.execute();
             const requestIds = result.items.map((item) => String(item.request.getId()));
             const summary = await sendToReplayInternal({
@@ -954,40 +894,20 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         group: ToolGroupId.ReplayUnsafe,
         toolName: "start_replay_task",
         description:
-            "Start Replay tasks. " +
-            'Example: { "items": [{ "session_id": 1, "raw_base64": "<base64>", "connection": { "host": "example.com", "port": 443, "is_tls": true } }] }. ' +
-            "raw_base64 is base64-encoded raw HTTP; defaults apply if settings are omitted.",
+            "Execute Replay sessions by ID: sends each session's current request and records the task. " +
+            "The session's request must already be set (via send_to_replay, send_to_replay_from_filter, or create_replay_session). " +
+            "To send a modified or hand-crafted raw request, use send_raw_requests instead. " +
+            'Example: { "session_ids": [1] }.',
         inputSchema: startReplayTaskSchema,
         handler: async (params) => {
-            const parsed = startReplayTaskSchema.parse(params);
-            const items =
-                "items" in parsed
-                    ? parsed.items
-                    : parsed.session_ids.map((sessionId) => ({
-                          session_id: sessionId,
-                          raw_base64: parsed.raw_base64,
-                          connection: parsed.connection,
-                          settings: parsed.settings,
-                      }));
+            const { session_ids } = startReplayTaskSchema.parse(params);
             const results = await Promise.all(
-                items.map(async (item) => {
-                    const resolvedSettings = item.settings ?? {
-                        placeholders: [],
-                        update_content_length: true,
-                        connection_close: true,
-                    };
+                session_ids.map(async (sessionId) => {
                     const response = await sdk.graphql.execute<StartReplayTaskResponse>(
                         START_REPLAY_TASK_MUTATION,
-                        {
-                            sessionId: item.session_id,
-                            input: {
-                                connection: toReplayConnection(item.connection),
-                                raw: item.raw_base64,
-                                settings: toReplaySettings(resolvedSettings),
-                            },
-                        },
+                        { sessionId },
                     );
-                    return { sessionId: item.session_id, result: response.data ?? response };
+                    return { sessionId, result: response.data ?? response };
                 }),
             );
             return { content: [{ type: "text", text: stringifyResult(results) }] };
