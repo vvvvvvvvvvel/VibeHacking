@@ -15,6 +15,8 @@ export enum ToolGroupId {
     FindingUnsafe = "finding-unsafe",
     HostedFileSafe = "hosted-file-safe",
     HostedFileUnsafe = "hosted-file-unsafe",
+    ProxyPassthroughSafe = "proxy-passthrough-safe",
+    ProxyPassthroughUnsafe = "proxy-passthrough-unsafe",
     ProjectSafe = "project-safe",
     ReplaySafe = "replay-safe",
     ReplayUnsafe = "replay-unsafe",
@@ -48,6 +50,18 @@ const BASE_GROUPS: ToolGroupSeed[] = [
     {
         id: ToolGroupId.HostedFileUnsafe,
         label: "HostedFile unsafe",
+        tools: [],
+        defaultMode: "confirm",
+    },
+    {
+        id: ToolGroupId.ProxyPassthroughSafe,
+        label: "Proxy passthrough safe",
+        tools: [],
+        defaultMode: "auto",
+    },
+    {
+        id: ToolGroupId.ProxyPassthroughUnsafe,
+        label: "Proxy passthrough unsafe",
         tools: [],
         defaultMode: "confirm",
     },

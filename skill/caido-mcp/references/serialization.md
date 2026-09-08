@@ -62,7 +62,13 @@ Find likely API tokens without returning full responses:
             "context_chars": 32
         }
     },
-    "fields": ["id", "request.method", "request.url", "response.status_code", "match_context.excerpts"]
+    "fields": [
+        "id",
+        "request.method",
+        "request.url",
+        "response.status_code",
+        "match_context.excerpts"
+    ]
 }
 ```
 

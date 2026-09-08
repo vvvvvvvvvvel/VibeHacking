@@ -1,7 +1,7 @@
 import { Buffer } from "buffer";
 
 import { RequestSpecRaw } from "caido:utils";
-import type { RequestOrderField, ResponseOrderField } from "caido:utils";
+import type { RequestOrderField, RequestsQuery, ResponseOrderField } from "caido:utils";
 import { z } from "zod";
 
 import {
@@ -36,8 +36,6 @@ import {
     toNumericId,
     validateHttpqlClause,
 } from "./shared";
-
-type RequestQuery = ReturnType<ToolContext["sdk"]["requests"]["query"]>;
 
 type ListRequestInput = {
     filter?: string;
@@ -222,7 +220,7 @@ const summarySchema = z
     })
     .strict();
 
-const applyRequestOrder = <T extends RequestQuery>(
+const applyRequestOrder = <T extends RequestsQuery>(
     query: T,
     order: NonNullable<ListRequestInput["order"]>,
 ) => {

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
     CREATE_REPLAY_COLLECTION_MUTATION,
+    CREATE_REPLAY_PIPELINE_HTTP_ONE_SESSION_MUTATION,
     DELETE_REPLAY_COLLECTION_MUTATION,
     DELETE_REPLAY_SESSIONS_MUTATION,
     GET_REPLAY_ENTRY_QUERY,
@@ -15,6 +16,7 @@ import {
     MOVE_REPLAY_SESSION_MUTATION,
     RENAME_REPLAY_COLLECTION_MUTATION,
     RENAME_REPLAY_SESSION_MUTATION,
+    SET_ACTIVE_REPLAY_PIPELINE_ENTRY_HTTP_ENTRY_MUTATION,
     START_REPLAY_TASK_MUTATION,
 } from "../graphql";
 import { ToolGroupId } from "../tool-permissions";
@@ -22,6 +24,7 @@ import { ToolGroupId } from "../tool-permissions";
 import { registerToolAction, type ToolContext } from "./register";
 import type { SerializationOptions } from "./shared";
 import {
+    ciEnum,
     HTTPQL_HELP_SHORT,
     serializeRequest,
     serializeResponse,
@@ -50,6 +53,57 @@ type DeleteReplaySessionsResponse = {
     deleteReplaySessions?: { deletedIds?: Array<string> };
 };
 
+type PipelineStrategyGql = {
+    __typename?: string;
+    abortOnFailure?: boolean;
+    failureBehavior?: string;
+    convertToHttp2?: boolean;
+};
+
+type ReplayHttpEntryGql = {
+    id: string;
+    error?: string;
+    createdAt?: string;
+    raw?: string;
+    connection?: { host: string; port: number; isTLS: boolean; SNI?: string };
+    request?: {
+        id: string;
+        host?: string;
+        port?: number;
+        path?: string;
+        query?: string;
+        method?: string;
+        createdAt?: string;
+        response?: { id: string; statusCode: number };
+    };
+};
+
+type ReplayEntryGql = {
+    id: string;
+    __typename?: string;
+    error?: string;
+    createdAt?: string;
+    raw?: string;
+    connection?: { host: string; port: number; isTLS: boolean; SNI?: string };
+    session?: { id: string; name?: string; __typename?: string };
+    request?: ReplayHttpEntryGql["request"];
+    settings?: { strategy?: PipelineStrategyGql };
+    draft?: { settings?: { strategy?: PipelineStrategyGql } };
+    activeHttpEntry?: ReplayHttpEntryGql;
+    httpEntries?: ReplayHttpEntryGql[];
+    http?: ReplayHttpEntryGql;
+    stream?: { id: string };
+};
+
+type ReplaySessionGql = {
+    id: string;
+    name: string;
+    __typename?: string;
+    collection?: { id: string; name: string };
+    settings?: { strategy?: PipelineStrategyGql };
+    activeEntry?: { id: string; __typename?: string };
+};
+
 type ReplayCollectionsResponse = {
     replaySessionCollections?: {
         pageInfo: {
@@ -73,21 +127,15 @@ type ReplayCollectionsDetailedResponse = {
         nodes: Array<{
             id: string;
             name: string;
-            sessions: Array<{
-                id: string;
-                name: string;
-                activeEntry?: { id: string };
-                entries: {
-                    count: { value: number };
-                    nodes: Array<{
-                        id: string;
-                        error?: string;
-                        createdAt: string;
-                        raw?: string;
-                        request?: { id: string };
-                    }>;
-                };
-            }>;
+            sessions: Array<
+                ReplaySessionGql & {
+                    activeEntry?: { id: string; __typename?: string };
+                    entries: {
+                        count: { value: number };
+                        nodes: ReplayEntryGql[];
+                    };
+                }
+            >;
         }>;
     };
 };
@@ -100,41 +148,45 @@ type ReplaySessionsResponse = {
             startCursor?: string;
             endCursor?: string;
         };
-        nodes: Array<{
-            id: string;
-            name: string;
-            collection?: { id: string; name: string };
-        }>;
+        nodes: ReplaySessionGql[];
     };
 };
 
 type ReplaySessionResponse = {
-    replaySession?: { id: string; name: string; collection?: { id: string; name: string } };
+    replaySession?: ReplaySessionGql;
 };
 
 type ReplayEntryResponse = {
-    replayEntry?: {
-        id: string;
-        error?: string;
-        raw?: string;
-        connection?: { host: string; port: number; isTLS: boolean; SNI?: string };
-        session?: { id: string };
-        request?: {
-            id: string;
-            host: string;
-            port: number;
-            path: string;
-            query?: string;
-            method: string;
-            createdAt: string;
-            response?: { id: string; statusCode: number };
-        };
-    };
+    replayEntry?: ReplayEntryGql;
 };
 
 type MoveReplaySessionResponse = {
     moveReplaySession?: {
-        session?: { id: string; name: string; collection?: { id: string; name: string } };
+        session?: ReplaySessionGql;
+    };
+};
+
+type CreateReplayPipelineSessionResponse = {
+    createReplayPipelineHttpOneSession?: {
+        session?: ReplaySessionGql & {
+            entries?: {
+                pageInfo: {
+                    hasNextPage: boolean;
+                    hasPreviousPage: boolean;
+                    startCursor?: string;
+                    endCursor?: string;
+                };
+                count: { value: number };
+                nodes: ReplayEntryGql[];
+            };
+        };
+        error?: { __typename?: string; code?: string; reason?: string };
+    };
+};
+
+type SetActiveReplayPipelineEntryHttpEntryResponse = {
+    setActiveReplayPipelineEntryHttpEntry?: {
+        entry?: ReplayEntryGql;
     };
 };
 
@@ -209,6 +261,8 @@ const serializationSchema = z
     })
     .strict();
 
+const replaySessionKindSchema = ciEnum(["http", "http_one_pipeline", "ws"]);
+
 const detailedCollectionsSchema = paginationSchema.extend({
     include_request: z.boolean().optional(),
     only_latest_entry_details: z.boolean().optional(),
@@ -216,14 +270,27 @@ const detailedCollectionsSchema = paginationSchema.extend({
     serialization: serializationSchema.optional(),
 });
 
+const replayEntryItemSchema = z
+    .object({
+        id: idSchema,
+        session_kind: replaySessionKindSchema.optional(),
+    })
+    .strict();
+
 const replayEntrySchema = z
     .object({
-        entry_ids: z.array(idSchema).min(1),
+        entry_ids: z.array(idSchema).min(1).optional(),
+        entries: z.array(replayEntryItemSchema).min(1).optional(),
+        session_kind: replaySessionKindSchema.default("http"),
         include_request: z.boolean().optional(),
         include_raw_when_request_missing: z.boolean().optional(),
         serialization: serializationSchema.optional(),
     })
-    .strict();
+    .strict()
+    .refine(
+        (value) => value.entry_ids !== undefined || value.entries !== undefined,
+        "Provide entry_ids or entries",
+    );
 
 const optionalIdSchema = z.preprocess(
     (value) => (value === "" ? undefined : value),
@@ -263,6 +330,39 @@ const sendToReplayFromFilterSchema = z
         "Provide collection_id or collection_name",
     );
 
+const pipelineFailureBehaviorSchema = ciEnum(["abort_on_partial", "fire_on_partial"]);
+
+const replayPipelineStrategySchema = z
+    .object({
+        type: ciEnum(["sequential", "last_byte_synchronization", "single_packet_attack"]).default(
+            "sequential",
+        ),
+        abort_on_failure: z.boolean().optional(),
+        failure_behavior: pipelineFailureBehaviorSchema.optional(),
+        convert_to_http2: z.boolean().optional(),
+    })
+    .strict()
+    .default({ type: "sequential" });
+
+const replayPipelineCreateSessionSchema = z
+    .object({
+        request_ids: z.array(idSchema).min(1),
+        collection_id: optionalIdSchema,
+        collection_name: optionalNameSchema,
+        create_collection_if_missing: z.boolean().optional(),
+        session_name: optionalNameSchema,
+        strategy: replayPipelineStrategySchema,
+        entry_limit: z.number().int().min(1).max(100).default(20),
+    })
+    .strict();
+
+const setActiveReplayPipelineEntrySchema = z
+    .object({
+        pipeline_entry_id: idSchema,
+        http_entry_id: idSchema,
+    })
+    .strict();
+
 const startReplayTaskSchema = z
     .object({
         session_ids: z.array(idSchema).min(1),
@@ -288,6 +388,200 @@ const toSerializationOptions = (
               includeBinary: input.include_binary,
               maxBinaryBytes: input.max_binary_bytes,
           };
+
+const toGraphqlReplaySessionKind = (value: z.infer<typeof replaySessionKindSchema>) => {
+    switch (value) {
+        case "http_one_pipeline":
+            return "HTTP_ONE_PIPELINE";
+        case "ws":
+            return "WS";
+        case "http":
+        default:
+            return "HTTP";
+    }
+};
+
+const toGraphqlFailureBehavior = (
+    value: z.infer<typeof pipelineFailureBehaviorSchema> | undefined,
+) => (value === "fire_on_partial" ? "FIRE_ON_PARTIAL" : "ABORT_ON_PARTIAL");
+
+const toReplayPipelineStrategyInput = (strategy: z.infer<typeof replayPipelineStrategySchema>) => {
+    switch (strategy.type) {
+        case "last_byte_synchronization":
+            return {
+                lastByteSynchronization: {
+                    failureBehavior: toGraphqlFailureBehavior(strategy.failure_behavior),
+                },
+            };
+        case "single_packet_attack":
+            return {
+                singlePacketAttack: {
+                    failureBehavior: toGraphqlFailureBehavior(strategy.failure_behavior),
+                    convertToHttp2: strategy.convert_to_http2 ?? true,
+                },
+            };
+        case "sequential":
+        default:
+            return {
+                sequential: {
+                    abortOnFailure: strategy.abort_on_failure ?? true,
+                },
+            };
+    }
+};
+
+type ReplayRequestDetails = {
+    requestDetails: unknown;
+    responseDetails: unknown;
+};
+
+const addReplayHttpEntryRequestId = (entry: ReplayHttpEntryGql | undefined, ids: Set<string>) => {
+    const requestId = entry?.request?.id;
+    if (requestId !== undefined && requestId !== null && requestId !== "") {
+        ids.add(requestId);
+    }
+};
+
+const collectReplayEntryRequestIds = (entry: ReplayEntryGql | undefined, ids: Set<string>) => {
+    if (entry === undefined) return;
+    addReplayHttpEntryRequestId(entry, ids);
+    addReplayHttpEntryRequestId(entry.http, ids);
+    addReplayHttpEntryRequestId(entry.activeHttpEntry, ids);
+    for (const httpEntry of entry.httpEntries ?? []) {
+        addReplayHttpEntryRequestId(httpEntry, ids);
+    }
+};
+
+const replayEntryHasRequest = (entry: ReplayEntryGql | undefined) => {
+    if (entry === undefined) return false;
+    const ids = new Set<string>();
+    collectReplayEntryRequestIds(entry, ids);
+    return ids.size > 0;
+};
+
+const stripReplayHttpEntryRaw = (entry: ReplayHttpEntryGql | undefined) => {
+    if (entry === undefined) return undefined;
+    const { raw, ...rest } = entry;
+    return rest;
+};
+
+const stripReplayEntryRaw = (entry: ReplayEntryGql | undefined) => {
+    if (entry === undefined) return null;
+    const { raw, http, activeHttpEntry, httpEntries, ...rest } = entry;
+    return {
+        ...rest,
+        http: stripReplayHttpEntryRaw(http),
+        activeHttpEntry: stripReplayHttpEntryRaw(activeHttpEntry),
+        httpEntries: httpEntries?.map(stripReplayHttpEntryRaw),
+    };
+};
+
+const enrichReplayHttpEntryFromMap = ({
+    entry,
+    requestMap,
+    includeRawWhenMissing,
+}: {
+    entry: ReplayHttpEntryGql | undefined;
+    requestMap: Map<string, ReplayRequestDetails>;
+    includeRawWhenMissing: boolean;
+}) => {
+    if (entry === undefined) return undefined;
+    const { raw, ...entryWithoutRaw } = entry;
+    const requestId = entry.request?.id;
+    const details = requestId !== undefined ? requestMap.get(requestId) : undefined;
+    const rawBase64 =
+        requestId !== undefined
+            ? undefined
+            : includeRawWhenMissing
+              ? (raw ?? undefined)
+              : undefined;
+    const rawUtf8 = rawBase64 !== undefined ? decodeRawBase64(rawBase64) : undefined;
+    return {
+        ...entryWithoutRaw,
+        requestDetails: details?.requestDetails ?? null,
+        responseDetails: details?.responseDetails ?? null,
+        requestRawBase64: rawBase64 ?? null,
+        requestRawUtf8: rawUtf8 ?? null,
+    };
+};
+
+const enrichReplayEntryFromMap = ({
+    entry,
+    requestMap,
+    includeRawWhenMissing,
+}: {
+    entry: ReplayEntryGql;
+    requestMap: Map<string, ReplayRequestDetails>;
+    includeRawWhenMissing: boolean;
+}) => {
+    const { raw, http, activeHttpEntry, httpEntries, ...entryWithoutRaw } = entry;
+    const requestId = entry.request?.id;
+    const details = requestId !== undefined ? requestMap.get(requestId) : undefined;
+    const rawBase64 =
+        requestId !== undefined
+            ? undefined
+            : includeRawWhenMissing
+              ? (raw ?? undefined)
+              : undefined;
+    const rawUtf8 = rawBase64 !== undefined ? decodeRawBase64(rawBase64) : undefined;
+    const hasTopLevelHttpRequest =
+        entry.request !== undefined || entry.connection !== undefined || raw !== undefined;
+
+    return {
+        ...entryWithoutRaw,
+        http: enrichReplayHttpEntryFromMap({
+            entry: http,
+            requestMap,
+            includeRawWhenMissing,
+        }),
+        activeHttpEntry: enrichReplayHttpEntryFromMap({
+            entry: activeHttpEntry,
+            requestMap,
+            includeRawWhenMissing,
+        }),
+        httpEntries: httpEntries?.map((httpEntry) =>
+            enrichReplayHttpEntryFromMap({
+                entry: httpEntry,
+                requestMap,
+                includeRawWhenMissing,
+            }),
+        ),
+        ...(hasTopLevelHttpRequest
+            ? {
+                  requestDetails: details?.requestDetails ?? null,
+                  responseDetails: details?.responseDetails ?? null,
+                  requestRawBase64: rawBase64 ?? null,
+                  requestRawUtf8: rawUtf8 ?? null,
+              }
+            : {}),
+    };
+};
+
+const loadReplayRequestDetailsMap = async ({
+    sdk,
+    requestIds,
+    serialization,
+}: {
+    sdk: ToolContext["sdk"];
+    requestIds: Iterable<string>;
+    serialization: SerializationOptions;
+}) => {
+    const requestMap = new Map<string, ReplayRequestDetails>();
+    await Promise.all(
+        Array.from(requestIds).map(async (requestId) => {
+            const requestPair = await sdk.requests.get(toId(requestId));
+            if (requestPair?.request === undefined) {
+                requestMap.set(requestId, { requestDetails: null, responseDetails: null });
+                return;
+            }
+            requestMap.set(requestId, {
+                requestDetails: serializeRequest(requestPair.request, serialization),
+                responseDetails: serializeResponse(requestPair.response, serialization),
+            });
+        }),
+    );
+    return requestMap;
+};
 
 export const registerReplayTools = ({ server, sdk, store, permissions }: ToolContext) => {
     const resolveReplayCollection = async ({
@@ -517,52 +811,28 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const requestIds = new Set<string>();
             for (const collection of data.replaySessionCollections.nodes) {
                 for (const session of collection.sessions) {
-                    const entriesWithRequest = session.entries.nodes.filter(
-                        (entry) => entry.request?.id !== undefined,
-                    );
+                    const entriesWithRequest = session.entries.nodes.filter(replayEntryHasRequest);
                     if (resolvedOnlyLatestEntryDetails) {
                         const latest = entriesWithRequest.at(-1);
-                        if (latest?.request?.id !== undefined) {
-                            requestIds.add(latest.request.id);
-                        }
+                        collectReplayEntryRequestIds(latest, requestIds);
                     } else {
                         for (const entry of entriesWithRequest) {
-                            if (entry.request?.id !== undefined) {
-                                requestIds.add(entry.request.id);
-                            }
+                            collectReplayEntryRequestIds(entry, requestIds);
                         }
                     }
                 }
             }
 
-            const requestMap = new Map<
-                string,
-                { requestDetails: unknown; responseDetails: unknown }
-            >();
             const resolvedSerialization: SerializationOptions = toSerializationOptions(
                 serialization,
             ) ?? {
                 includeBody: false,
             };
-            await Promise.all(
-                Array.from(requestIds).map(async (requestId) => {
-                    const requestPair = await sdk.requests.get(toId(requestId));
-                    if (requestPair?.request === undefined) {
-                        requestMap.set(requestId, { requestDetails: null, responseDetails: null });
-                        return;
-                    }
-                    requestMap.set(requestId, {
-                        requestDetails: serializeRequest(
-                            requestPair.request,
-                            resolvedSerialization,
-                        ),
-                        responseDetails: serializeResponse(
-                            requestPair.response,
-                            resolvedSerialization,
-                        ),
-                    });
-                }),
-            );
+            const requestMap = await loadReplayRequestDetailsMap({
+                sdk,
+                requestIds,
+                serialization: resolvedSerialization,
+            });
 
             const enriched = {
                 ...data,
@@ -574,31 +844,13 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                             ...session,
                             entries: {
                                 ...session.entries,
-                                nodes: session.entries.nodes.map((entry) => {
-                                    const { raw, ...entryWithoutRaw } = entry;
-                                    const requestId = entry.request?.id;
-                                    const details =
-                                        requestId !== undefined
-                                            ? requestMap.get(requestId)
-                                            : undefined;
-                                    const rawBase64 =
-                                        requestId !== undefined
-                                            ? undefined
-                                            : resolvedIncludeRawWhenMissing
-                                              ? (entry.raw ?? undefined)
-                                              : undefined;
-                                    const rawUtf8 =
-                                        rawBase64 !== undefined
-                                            ? decodeRawBase64(rawBase64)
-                                            : undefined;
-                                    return {
-                                        ...entryWithoutRaw,
-                                        requestDetails: details?.requestDetails ?? null,
-                                        responseDetails: details?.responseDetails ?? null,
-                                        requestRawBase64: rawBase64 ?? null,
-                                        requestRawUtf8: rawUtf8 ?? null,
-                                    };
-                                }),
+                                nodes: session.entries.nodes.map((entry) =>
+                                    enrichReplayEntryFromMap({
+                                        entry,
+                                        requestMap,
+                                        includeRawWhenMissing: resolvedIncludeRawWhenMissing,
+                                    }),
+                                ),
                             },
                         })),
                     })),
@@ -641,13 +893,16 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                         { id },
                     );
                     const session = response.data?.replaySession;
-                    if (session === undefined) {
-                        return { id, error: response.errors ?? response.data ?? response };
+                    if (session === undefined || session === null) {
+                        return { id, error: response.errors ?? "not found" };
                     }
                     return {
                         id: session.id,
                         name: session.name,
+                        type: session.__typename,
                         collection: session.collection ?? undefined,
+                        settings: session.settings ?? undefined,
+                        activeEntry: session.activeEntry ?? undefined,
                     };
                 }),
             );
@@ -663,28 +918,43 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         toolName: "get_replay_entry",
         description:
             "Get Replay entries by ID. " +
-            'Example: { "entry_ids": [1], "include_request": true }. ' +
+            'Example: { "entry_ids": [1], "session_kind": "http", "include_request": true }. ' +
+            "Use session_kind=http_one_pipeline for pipeline entries or pass entries with per-entry session_kind. " +
             "If include_request is true, request_details/response_details are added when available. " +
             "Bodies are included by default; set serialization.include_body=false to omit. " +
             "If a request is missing, raw is returned by default; set include_raw_when_request_missing=false to omit.",
         inputSchema: replayEntrySchema,
         handler: async (params) => {
-            const { entry_ids, include_request, include_raw_when_request_missing, serialization } =
-                replayEntrySchema.parse(params);
+            const {
+                entry_ids,
+                entries,
+                session_kind,
+                include_request,
+                include_raw_when_request_missing,
+                serialization,
+            } = replayEntrySchema.parse(params);
             const resolvedSerialization = toSerializationOptions(serialization);
+            const entryInputs =
+                entries ??
+                entry_ids?.map((id) => ({
+                    id,
+                    session_kind,
+                })) ??
+                [];
             const results = [];
-            for (const id of entry_ids) {
+            for (const input of entryInputs) {
+                const id = input.id;
                 const response = await sdk.graphql.execute<ReplayEntryResponse>(
                     GET_REPLAY_ENTRY_QUERY,
-                    { id },
+                    {
+                        id,
+                        sessionKind: toGraphqlReplaySessionKind(input.session_kind ?? session_kind),
+                    },
                 );
                 const replayEntry = response.data?.replayEntry;
-                const replayEntryWithoutRaw = replayEntry
-                    ? (({ raw, ...rest }) => rest)(replayEntry)
-                    : null;
                 if (replayEntry === undefined || include_request === false) {
                     results.push({
-                        replayEntry: replayEntryWithoutRaw,
+                        replayEntry: stripReplayEntryRaw(replayEntry),
                         requestDetails: null,
                         responseDetails: null,
                         requestRawBase64: null,
@@ -692,40 +962,31 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                     });
                     continue;
                 }
-                const requestId = replayEntry.request?.id;
-                if (requestId === undefined || requestId === null || requestId === "") {
-                    const resolvedIncludeRawWhenMissing = include_raw_when_request_missing ?? true;
-                    const rawBase64 = resolvedIncludeRawWhenMissing
-                        ? (replayEntry.raw ?? undefined)
-                        : undefined;
-                    const rawUtf8 =
-                        rawBase64 !== undefined ? decodeRawBase64(rawBase64) : undefined;
-                    results.push({
-                        replayEntry: replayEntryWithoutRaw,
-                        requestDetails: null,
-                        responseDetails: null,
-                        requestRawBase64: rawBase64 ?? null,
-                        requestRawUtf8: rawUtf8 ?? null,
-                    });
-                    continue;
-                }
-                const requestPair = await sdk.requests.get(toId(requestId));
-                if (requestPair?.request === undefined) {
-                    results.push({
-                        replayEntry: replayEntryWithoutRaw,
-                        requestDetails: null,
-                        responseDetails: null,
-                        requestRawBase64: null,
-                        requestRawUtf8: null,
-                    });
-                    continue;
-                }
+                const requestIds = new Set<string>();
+                collectReplayEntryRequestIds(replayEntry, requestIds);
+                const requestMap = await loadReplayRequestDetailsMap({
+                    sdk,
+                    requestIds,
+                    serialization: resolvedSerialization ?? {},
+                });
+                const enriched = enrichReplayEntryFromMap({
+                    entry: replayEntry,
+                    requestMap,
+                    includeRawWhenMissing: include_raw_when_request_missing ?? true,
+                });
+                const {
+                    requestDetails,
+                    responseDetails,
+                    requestRawBase64,
+                    requestRawUtf8,
+                    ...entryWithoutTopLevelDetails
+                } = enriched;
                 results.push({
-                    replayEntry: replayEntryWithoutRaw,
-                    requestDetails: serializeRequest(requestPair.request, resolvedSerialization),
-                    responseDetails: serializeResponse(requestPair.response, resolvedSerialization),
-                    requestRawBase64: null,
-                    requestRawUtf8: null,
+                    replayEntry: entryWithoutTopLevelDetails,
+                    requestDetails: requestDetails ?? null,
+                    responseDetails: responseDetails ?? null,
+                    requestRawBase64: requestRawBase64 ?? null,
+                    requestRawUtf8: requestRawUtf8 ?? null,
                 });
             }
             return {
@@ -827,6 +1088,124 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                 createCollectionIfMissing: create_collection_if_missing,
             });
             return { content: [{ type: "text", text: stringifyResult(summary) }] };
+        },
+    });
+
+    registerToolAction(server, sdk, store, permissions, {
+        action: "sdk.replay.createPipelineSession",
+        group: ToolGroupId.ReplaySafe,
+        toolName: "create_replay_pipeline_session",
+        description:
+            "Create a Replay HTTP/1 pipeline session from saved request IDs. " +
+            "This only prepares the Replay session; use start_replay_task to execute it. " +
+            "Strategies: sequential, last_byte_synchronization, single_packet_attack. " +
+            'Example: { "request_ids": [1, 2], "collection_name": "Race tests", "strategy": { "type": "single_packet_attack", "failure_behavior": "abort_on_partial", "convert_to_http2": true } }.',
+        inputSchema: replayPipelineCreateSessionSchema,
+        handler: async (params) => {
+            const parsed = replayPipelineCreateSessionSchema.parse(params);
+            const { collectionId, collectionResolved, shouldCreateCollection } =
+                await resolveReplayCollection({
+                    collectionId: parsed.collection_id,
+                    collectionName: parsed.collection_name,
+                    createCollectionIfMissing: parsed.create_collection_if_missing,
+                });
+
+            if (
+                parsed.collection_name !== undefined &&
+                parsed.collection_name !== "" &&
+                collectionId === undefined &&
+                !shouldCreateCollection
+            ) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: stringifyResult({
+                                collection: { name: parsed.collection_name },
+                                error: `collection not found: ${parsed.collection_name}`,
+                            }),
+                        },
+                    ],
+                };
+            }
+
+            const input: Record<string, unknown> = {
+                requestSources: parsed.request_ids.map((id) => ({ id })),
+                settings: {
+                    strategy: toReplayPipelineStrategyInput(parsed.strategy),
+                },
+            };
+            if (collectionId !== undefined && collectionId !== "") {
+                input.collectionId = collectionId;
+            }
+
+            const response = await sdk.graphql.execute<CreateReplayPipelineSessionResponse>(
+                CREATE_REPLAY_PIPELINE_HTTP_ONE_SESSION_MUTATION,
+                {
+                    input,
+                    entryFirst: parsed.entry_limit,
+                },
+            );
+            const payload = response.data?.createReplayPipelineHttpOneSession;
+            if (payload?.session === undefined || payload.session === null) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: stringifyResult({
+                                collection: collectionResolved,
+                                error:
+                                    payload?.error ?? response.errors ?? response.data ?? response,
+                            }),
+                        },
+                    ],
+                };
+            }
+
+            let session = payload.session;
+            if (parsed.session_name !== undefined && parsed.session_name !== "") {
+                const renamed = await sdk.graphql.execute<RenameReplaySessionResponse>(
+                    RENAME_REPLAY_SESSION_MUTATION,
+                    { id: payload.session.id, name: parsed.session_name },
+                );
+                session = {
+                    ...session,
+                    name: renamed.data?.renameReplaySession?.session?.name ?? parsed.session_name,
+                };
+            }
+
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: stringifyResult({
+                            collection: collectionResolved ?? session.collection ?? undefined,
+                            session,
+                        }),
+                    },
+                ],
+            };
+        },
+    });
+
+    registerToolAction(server, sdk, store, permissions, {
+        action: "sdk.replay.setPipelineActiveHttpEntry",
+        group: ToolGroupId.ReplaySafe,
+        toolName: "set_replay_pipeline_active_http_entry",
+        description:
+            "Set the active HTTP entry inside a Replay pipeline entry. This changes Replay state but does not send traffic.",
+        inputSchema: setActiveReplayPipelineEntrySchema,
+        handler: async (params) => {
+            const { pipeline_entry_id, http_entry_id } =
+                setActiveReplayPipelineEntrySchema.parse(params);
+            const response =
+                await sdk.graphql.execute<SetActiveReplayPipelineEntryHttpEntryResponse>(
+                    SET_ACTIVE_REPLAY_PIPELINE_ENTRY_HTTP_ENTRY_MUTATION,
+                    { id: pipeline_entry_id, httpEntryId: http_entry_id },
+                );
+            return {
+                content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
+            };
         },
     });
 

@@ -10,12 +10,12 @@
     "author": "vvvvvvvvvvel",
     "license": "MIT",
     "dependencies": {
-        "vue": "^3.5.41"
+        "vue": "^3.5.42"
     },
     "devDependencies": {
-        "@caido/sdk-frontend": "^0.57.1",
-        "@vue/tsconfig": "^0.8.1",
+        "@caido/sdk-frontend": "^0.58.3",
+        "@vue/tsconfig": "^0.9.1",
         "shared": "workspace:*",
-        "vue-tsc": "^3.3.9"
+        "vue-tsc": "^3.3.11"
     }
 }

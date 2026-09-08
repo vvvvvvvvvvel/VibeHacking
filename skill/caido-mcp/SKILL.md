@@ -1,6 +1,6 @@
 ---
 name: caido-mcp
-description: Use the Caido MCP tools to inspect and act on captured HTTP/WebSocket traffic in Caido — HTTP history, Sitemap, WebSocket, Replay, scopes, findings, filters, environments, and Tamper (Match & Replace) rules. Covers HTTPQL filtering (including host filtering when scope is broad), compact field projections, regex excerpts, and safe evidence-focused workflows. Use whenever the task involves reading Caido traffic or driving Caido through MCP.
+description: Use the Caido MCP tools to inspect and act on captured HTTP/WebSocket traffic in Caido — HTTP history, Sitemap, WebSocket, Replay, scopes, proxy passthrough, findings, filters, environments, and Tamper (Match & Replace) rules. Covers HTTPQL filtering (including host filtering when scope is broad), compact field projections, regex excerpts, and safe evidence-focused workflows. Use whenever the task involves reading Caido traffic or driving Caido through MCP.
 compatibility: Requires a running Caido instance with the Vibe Hacking MCP plugin installed and reachable by the agent.
 metadata:
     author: vvvvvvvvvvel
@@ -20,6 +20,8 @@ Drive Caido through MCP: discover traffic read-only, narrow with Caido-native fi
 6. Report IDs, filters, active sends, and remaining uncertainty.
 
 Keep broad discovery body-light. Do not request raw bodies unless they are necessary evidence.
+
+Use `get_proxy_passthrough_options` before changing proxy passthrough behavior. Use `set_proxy_passthrough_options` only when the user wants Caido to bypass/allow/deny specific targets.
 
 ## Scope
 
@@ -220,7 +222,8 @@ List streams first, then messages by stream:
 
 ## Replay and Other Tools
 
-- Replay: find source requests in history, then use `send_to_replay` or `send_to_replay_from_filter` to build sessions. Use `start_replay_task` (by `session_ids`) only when active Replay execution of those sessions is intended; it sends each session's current request. For a modified/crafted raw request, prefer `send_raw_requests`.
+- Replay: find source requests in history, then use `send_to_replay` or `send_to_replay_from_filter` to build sessions. Use `create_replay_pipeline_session` when preparing Caido's HTTP/1 pipeline Replay flow for ordered/last-byte/single-packet validation. Use `start_replay_task` (by `session_ids`) only when active Replay execution of those sessions is intended; it sends each session's current request. For a modified/crafted raw request, prefer `send_raw_requests`.
+- Proxy passthrough: use `get_proxy_passthrough_options` to inspect allowlist, denylist, and out-of-scope passthrough. Use `set_proxy_passthrough_options` to update only the intended fields; omitted fields keep their current values.
 - Scopes: see the Scope section. Use `list_scopes` / `get_scope` / `check_requests_scope` only when scope membership matters.
 - Filters: use `list_filter_presets` and `get_filter_preset` to reuse saved HTTPQL.
 - Findings: check existing findings before creating or updating.

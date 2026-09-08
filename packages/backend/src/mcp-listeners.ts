@@ -1,3 +1,5 @@
+import type { Server as NetServer } from "net";
+
 import { Blob, Response as CaidoResponse } from "caido:http";
 import type { Request as CaidoRequest } from "caido:http";
 
@@ -6,7 +8,7 @@ import type { MCPSDK } from "./types/sdk";
 
 const CONTROL_BIND_HOST = "127.0.0.1";
 
-type RuntimeServer = ReturnType<typeof createHttpServer>;
+type RuntimeServer = NetServer;
 
 type Route = {
     path: string;
@@ -325,7 +327,7 @@ export class McpListenerManager {
     private closeServer(server: RuntimeServer) {
         return new Promise<void>((resolve) => {
             let done = false;
-            let timer: ReturnType<typeof setTimeout> | undefined;
+            let timer: NodeJS.Timeout | undefined;
 
             const cleanup = () => {
                 try {
@@ -338,7 +340,7 @@ export class McpListenerManager {
                 } catch {
                     // Ignore cleanup errors.
                 }
-                if (timer) {
+                if (timer !== undefined) {
                     clearTimeout(timer);
                     timer = undefined;
                 }

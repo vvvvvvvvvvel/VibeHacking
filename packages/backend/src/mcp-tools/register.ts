@@ -43,7 +43,7 @@ const executeAction = async (
             async () => {
                 const result = await store.runAction(payload.action, payload.params);
                 if (isToolResult(result)) return result;
-                return { content: [{ type: "text", text: "ok" }] } as ToolResult;
+                return { content: [{ type: "text", text: "ok" }] };
             },
         );
         sdk.api.send(

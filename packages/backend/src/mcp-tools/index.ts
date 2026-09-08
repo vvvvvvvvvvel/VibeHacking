@@ -9,6 +9,7 @@ import { registerEnvTools } from "./env";
 import { registerFilterTools } from "./filters";
 import { registerFindingsTools } from "./findings";
 import { registerHostedFileTools } from "./hosted-file";
+import { registerPassthroughTools } from "./passthrough";
 import { registerProjectTools } from "./projects";
 import { attachToolActionRegistry, type ToolContext } from "./register";
 import { registerReplayTools } from "./replay";
@@ -33,6 +34,7 @@ export function registerMcpTools(
     registerProjectTools(ctx);
     registerScopeTools(ctx);
     registerHostedFileTools(ctx);
+    registerPassthroughTools(ctx);
     registerFindingsTools(ctx);
     registerRequestTools(ctx);
     registerSitemapTools(ctx);

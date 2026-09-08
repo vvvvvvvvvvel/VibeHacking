@@ -5,6 +5,7 @@ import { runRuntime } from "./runtime";
 import { runProjects } from "./projects";
 import { runEnv } from "./env";
 import { runHostedFile } from "./hosted-file";
+import { runPassthrough } from "./passthrough";
 import { runRequests } from "./requests";
 import { runFindings } from "./findings";
 import { runFilters } from "./filters";
@@ -20,6 +21,7 @@ const TOOL_RUNNERS: Record<string, (tools: Set<string>) => Promise<void>> = {
     projects: runProjects,
     env: runEnv,
     hostedFile: runHostedFile,
+    passthrough: runPassthrough,
     requests: runRequests,
     findings: runFindings,
     filters: runFilters,

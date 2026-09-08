@@ -3,9 +3,8 @@
     "compilerOptions": {
         "lib": ["DOM", "ESNext"],
         "types": ["@caido/sdk-frontend"],
-        "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["./src/*"]
         }
     },
     "include": ["./src/**/*.ts", "./src/**/*.vue", "./src/**/*.d.ts"]

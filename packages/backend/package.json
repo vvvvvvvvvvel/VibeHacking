@@ -10,11 +10,11 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
         "shared": "workspace:*",
-        "zod": "^4.4.3"
+        "zod": "^4.5.4"
     },
     "devDependencies": {
         "@caido/quickjs-types": "^0.26.0",
-        "@caido/sdk-backend": "^0.57.1"
+        "@caido/sdk-backend": "^0.58.3"
     },
     "keywords": [],
     "author": "vvvvvvvvvvel",

@@ -16,8 +16,6 @@
         "noUnusedLocals": true,
 
         "useDefineForClassFields": true,
-        "isolatedModules": true,
-
-        "baseUrl": "."
+        "isolatedModules": true
     }
 }

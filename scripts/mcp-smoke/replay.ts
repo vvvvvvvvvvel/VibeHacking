@@ -42,6 +42,8 @@ export const runReplay = async (tools: Set<string>) => {
     let sessionId: number | null = null;
     let entryId: number | null = null;
     let missingRequestEntryId: number | null = null;
+    let pipelineEntryId: number | null = null;
+    let pipelineHttpEntryId: number | null = null;
 
     await runIfTool("create_replay_collection", async () => {
         const name = `smoke-${Date.now()}`;
@@ -150,6 +152,45 @@ export const runReplay = async (tools: Set<string>) => {
         });
     });
 
+    await runIfTool("create_replay_pipeline_session", async () => {
+        assert(requestIdNum !== null, "no numeric request for create_replay_pipeline_session");
+        const res = await callTool("create_replay_pipeline_session", {
+            request_ids: [requestIdNum],
+            collection_id: collectionId ?? undefined,
+            session_name: "smoke-pipeline",
+            strategy: { type: "sequential", abort_on_failure: true },
+            entry_limit: 5,
+        });
+        const text = getToolText(res);
+        const parsed = tryParseJSON<{
+            session?: {
+                id?: number | string;
+                entries?: { nodes?: Array<any> };
+            };
+            error?: unknown;
+        }>(text);
+        assert(parsed?.session?.id, "pipeline session id missing");
+        sessionId = Number(parsed.session.id);
+        const firstEntry = parsed.session.entries?.nodes?.[0];
+        if (firstEntry?.id != null) {
+            pipelineEntryId = Number(firstEntry.id);
+            pipelineHttpEntryId =
+                firstEntry.active_http_entry?.id != null
+                    ? Number(firstEntry.active_http_entry.id)
+                    : firstEntry.http_entries?.[0]?.id != null
+                      ? Number(firstEntry.http_entries[0].id)
+                      : null;
+        }
+    });
+
+    await runIfTool("set_replay_pipeline_active_http_entry", async () => {
+        if (pipelineEntryId === null || pipelineHttpEntryId === null) return;
+        await callTool("set_replay_pipeline_active_http_entry", {
+            pipeline_entry_id: pipelineEntryId,
+            http_entry_id: pipelineHttpEntryId,
+        });
+    });
+
     await runIfTool("list_replay_collections_detailed", async () => {
         if (missingRequestEntryId) {
             return;
@@ -188,6 +229,16 @@ export const runReplay = async (tools: Set<string>) => {
     await runIfTool("get_replay_session", async () => {
         assert(sessionId !== null, "no session for get_replay_session");
         await callTool("get_replay_session", { session_ids: [sessionId] });
+
+        const missingRes = await callTool("get_replay_session", {
+            session_ids: ["2147483647"],
+        });
+        const missingText = getToolText(missingRes);
+        const missingParsed = tryParseJSON<Array<{ id?: number; error?: unknown }>>(missingText);
+        assert(
+            missingParsed?.[0]?.id === 2147483647 && missingParsed[0].error === "not found",
+            "get_replay_session missing ID should return a structured error",
+        );
     });
 
     const runGetReplayEntryChecks = async () => {

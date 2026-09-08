@@ -1,3 +1,5 @@
+import type { DialogComponent } from "@caido/sdk-frontend";
+
 import QDialog from "@/components/QDialog.vue";
 import dialogCss from "@/styles/dialog.css?raw";
 import type { FrontendSDK } from "@/types";
@@ -8,7 +10,11 @@ const DETAILS_TOGGLE_SELECTOR = "[data-mcp-details-toggle]";
 const DETAILS_BODY_SELECTOR = "[data-mcp-details-body]";
 const DETAILS_CHEVRON_SELECTOR = "[data-mcp-details-chevron]";
 const DIALOG_STYLE_ID = "mcp-dialog-styles";
-type DialogHandle = ReturnType<FrontendSDK["window"]["showDialog"]>;
+type DialogHandle = {
+    close: () => void;
+};
+
+const qDialogComponent = QDialog as unknown as DialogComponent;
 
 const DEFAULT_DIALOG_OPTIONS: Record<string, unknown> = {
     title: "",
@@ -164,7 +170,7 @@ export const showQDialog = (sdk: FrontendSDK, options: QDialogOptions = {}) => {
 
     const dialog = sdk.window.showDialog(
         {
-            component: QDialog,
+            component: qDialogComponent,
             props: {
                 title: options.title,
                 message: options.message,

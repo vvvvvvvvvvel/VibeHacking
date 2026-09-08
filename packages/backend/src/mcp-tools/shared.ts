@@ -357,9 +357,9 @@ export const toWireValue = (value: unknown, parentKey?: string): unknown => {
 
 export const stringifyResult = (value: unknown): string => JSON.stringify(toWireValue(value));
 
-export const toId = (value: string): ID => value as unknown as ID;
-export const toDedupeKey = (value: string): DedupeKey => value as unknown as DedupeKey;
-export const toCursor = (value: string): Cursor => value as unknown as Cursor;
+export const toId = (value: string): ID => value;
+export const toDedupeKey = (value: string): DedupeKey => value;
+export const toCursor = (value: string): Cursor => value;
 
 export const isToolResult = (value: unknown): value is ToolResult => {
     if (value === null || value === undefined || typeof value !== "object") return false;

@@ -2,6 +2,7 @@ node_modules
 dist
 .DS_Store
 .idea
+.pw-new-mcp
 test.txt
 desc.txt
 tmp

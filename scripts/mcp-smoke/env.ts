@@ -24,7 +24,12 @@ export const runEnv = async (tools: Set<string>) => {
     await runIfTool("set_environment_variable", async () => {
         const name = `MCP_SMOKE_${Date.now()}`;
         // global defaults to false now; set it explicitly to hit the always-present global env.
-        await callTool("set_environment_variable", { name, value: "1", secret: false, global: true });
+        await callTool("set_environment_variable", {
+            name,
+            value: "1",
+            secret: false,
+            global: true,
+        });
         const res = await callTool("get_environment_variable", { name });
         const text = getToolText(res);
         const parsed = tryParseJSON<{ name?: string; value?: string }>(text);
