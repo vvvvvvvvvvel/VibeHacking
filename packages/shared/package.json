@@ -1,6 +1,6 @@
 {
     "name": "shared",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "description": "MCP shared",
     "type": "module",
     "types": "src/index.ts",
