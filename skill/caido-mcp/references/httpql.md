@@ -12,10 +12,10 @@ HTTPQL is Caido's filter language. It is used as a raw string in `list_requests.
 - `resp` fields: `code`, `raw`, `roundtrip` (ms), `ext`.
 - `row` fields: `id`.
 - Operators:
-  - `eq` / `ne` — exact match.
-  - `cont` / `ncont` — contains (case-insensitive; LIKE supports `%` and `_`).
-  - `gt` / `gte` / `lt` / `lte` — numbers and dates.
-  - `regex` / `nregex` — regular expression on text (some regex features are unsupported).
+    - `eq` / `ne` — exact match.
+    - `cont` / `ncont` — contains (case-insensitive; LIKE supports `%` and `_`).
+    - `gt` / `gte` / `lt` / `lte` — numbers and dates.
+    - `regex` / `nregex` — regular expression on text (some regex features are unsupported).
 - `created_at` formats: RFC3339, ISO 8601, RFC2822, RFC7231, ISO9075.
 
 ```text
