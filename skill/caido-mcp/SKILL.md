@@ -1,9 +1,9 @@
 ---
 name: caido-mcp
 description: Use the Caido MCP tools to inspect and act on captured HTTP/WebSocket traffic in Caido — HTTP history, Sitemap, WebSocket, Replay, scopes, proxy passthrough, findings, filters, environments, and Tamper (Match & Replace) rules. Covers HTTPQL filtering (including host filtering when scope is broad), compact field projections, regex excerpts, and safe evidence-focused workflows. Use whenever the task involves reading Caido traffic or driving Caido through MCP.
-compatibility: Requires a running Caido instance with the Vibe Hacking MCP plugin installed and reachable by the agent.
 metadata:
     author: vvvvvvvvvvel
+    compatibility: Requires a running Caido instance with the Vibe Hacking MCP plugin installed and reachable by the agent.
 ---
 
 # Caido MCP
