@@ -35,7 +35,7 @@ export const registerHostedFileTools = ({
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.hostedFile.getAll",
         group: ToolGroupId.HostedFileSafe,
-        toolName: "get_hosted_file",
+        toolName: "list_hosted_files",
         description: "List files from the Files section.",
         inputSchema: hostedFileGetAllSchema,
         handler: async () => {

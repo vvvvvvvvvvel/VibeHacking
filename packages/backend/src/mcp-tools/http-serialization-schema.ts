@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
     DEFAULT_MAX_BINARY_BODY_BYTES,
     DEFAULT_MAX_TEXT_BODY_CHARS,
+    MAX_REGEX_EXCERPT_CONTEXT_CHARS,
+    MAX_REGEX_EXCERPT_PATTERN_CHARS,
     type ProjectedHttpSerializationOptionsInput,
 } from "../history";
 
@@ -10,8 +12,13 @@ const DEFAULT_REGEX_EXCERPT_CONTEXT_CHARS = 10;
 
 const regexExcerptObjectSchema = z
     .object({
-        context_chars: z.number().int().min(0).default(DEFAULT_REGEX_EXCERPT_CONTEXT_CHARS),
-        regex: z.string().min(1),
+        context_chars: z
+            .number()
+            .int()
+            .min(0)
+            .max(MAX_REGEX_EXCERPT_CONTEXT_CHARS)
+            .default(DEFAULT_REGEX_EXCERPT_CONTEXT_CHARS),
+        regex: z.string().min(1).max(MAX_REGEX_EXCERPT_PATTERN_CHARS),
     })
     .strict();
 

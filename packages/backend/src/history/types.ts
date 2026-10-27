@@ -23,6 +23,7 @@ export type MatchContext = {
         path: string;
         text: string;
     }>;
+    truncated?: boolean;
 };
 
 export type ProjectedHttpSerializationOptionsInput = {

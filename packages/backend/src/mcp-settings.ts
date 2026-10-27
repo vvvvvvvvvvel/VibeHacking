@@ -1,7 +1,14 @@
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
-import { MCP_DEFAULT_HOST, MCP_DEFAULT_PORT, type McpSettings } from "shared";
+import {
+    MCP_DEFAULT_CONFIRMATION_TIMEOUT_SECONDS,
+    MCP_DEFAULT_HOST,
+    MCP_DEFAULT_PORT,
+    MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS,
+    MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS,
+    type McpSettings,
+} from "shared";
 import { z } from "zod";
 
 import { getKvSdk, type KVSDK, type MCPSDK } from "./types/sdk";
@@ -10,12 +17,19 @@ export type SettingsSnapshot = {
     enabled: boolean;
     host: string;
     port: number;
+    confirmationTimeoutSeconds: number;
 };
 
 const settingsSchema = z.object({
     enabled: z.boolean().optional(),
     host: z.string().trim().min(1).optional(),
     port: z.number().int().min(1).max(65535).optional(),
+    confirmationTimeoutSeconds: z
+        .number()
+        .int()
+        .min(MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS)
+        .max(MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS)
+        .optional(),
 });
 
 const SETTINGS_KEY = "mcp-server-settings";
@@ -36,6 +50,7 @@ export class McpSettingsStore {
             enabled: false,
             host: MCP_DEFAULT_HOST,
             port: MCP_DEFAULT_PORT,
+            confirmationTimeoutSeconds: MCP_DEFAULT_CONFIRMATION_TIMEOUT_SECONDS,
         };
     }
 
@@ -59,12 +74,17 @@ export class McpSettingsStore {
         return this.state.port;
     }
 
+    get confirmationTimeoutMs(): number {
+        return this.state.confirmationTimeoutSeconds * 1000;
+    }
+
     getMcpServerSettings(endpointPath: string, controlEndpointPath: string): McpSettings {
         const displayHost = this.state.host === "0.0.0.0" ? "127.0.0.1" : this.state.host;
         return {
             enabled: this.state.enabled,
             host: this.state.host,
             port: this.state.port,
+            confirmationTimeoutSeconds: this.state.confirmationTimeoutSeconds,
             url: `http://${displayHost}:${this.state.port}${endpointPath}`,
             controlUrl: `http://127.0.0.1:${this.state.port}${controlEndpointPath}`,
         };
@@ -84,6 +104,11 @@ export class McpSettingsStore {
     updateMcpServerConfig(input: { host: string; port: number }) {
         const { host, port } = this.validateConfig(input);
         this.state = { ...this.state, host, port };
+    }
+
+    setToolConfirmationTimeout(seconds: number) {
+        const confirmationTimeoutSeconds = this.validateConfirmationTimeout(seconds);
+        this.state = { ...this.state, confirmationTimeoutSeconds };
     }
 
     async load(): Promise<SettingsSnapshot | undefined> {
@@ -141,6 +166,8 @@ export class McpSettingsStore {
             enabled: parsed.enabled ?? this.state.enabled,
             host: parsed.host ?? this.state.host,
             port: parsed.port ?? this.state.port,
+            confirmationTimeoutSeconds:
+                parsed.confirmationTimeoutSeconds ?? this.state.confirmationTimeoutSeconds,
         };
     }
 
@@ -175,5 +202,19 @@ export class McpSettingsStore {
             throw new Error("Port must be between 1 and 65535");
         }
         return { host: nextHost, port: nextPort };
+    }
+
+    private validateConfirmationTimeout(seconds: number) {
+        const value = Math.floor(seconds);
+        if (
+            !Number.isFinite(value) ||
+            value < MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS ||
+            value > MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS
+        ) {
+            throw new Error(
+                `Confirmation timeout must be between ${MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS} and ${MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS} seconds`,
+            );
+        }
+        return value;
     }
 }

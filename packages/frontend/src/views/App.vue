@@ -332,6 +332,54 @@
                         <h2>Tools</h2>
                         <p>Manage confirmation behavior for tool groups.</p>
                     </div>
+                    <div v-if="toolPermissions" class="tool-profile">
+                        <span class="label">Profile</span>
+                        <details class="tool-dropdown" :class="{ busy: profileBusy }">
+                            <summary class="tool-dropdown__summary">
+                                <span>{{ profileLabel }}</span>
+                                <span class="tool-dropdown__chevron" aria-hidden="true">▾</span>
+                            </summary>
+                            <div class="tool-dropdown__menu" role="listbox">
+                                <button
+                                    v-for="option in toolProfileOptions"
+                                    :key="option.value"
+                                    type="button"
+                                    class="tool-dropdown__option"
+                                    :class="{ active: toolPermissions.profile === option.value }"
+                                    @click="onProfileSelect(option.value, $event)"
+                                >
+                                    {{ option.label }}
+                                </button>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
+                <div class="tool-settings">
+                    <div class="tool-settings__info">
+                        <div class="tool-title">Confirmation timeout</div>
+                        <div class="hint">How long a tool waits for approval before failing.</div>
+                    </div>
+                    <div class="tool-settings__control">
+                        <input
+                            v-model.number="draftConfirmationTimeoutSeconds"
+                            class="edit-input tool-settings__input"
+                            type="number"
+                            :min="MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS"
+                            :max="MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS"
+                            :disabled="confirmationTimeoutBusy || loading"
+                            aria-label="Confirmation timeout in seconds"
+                        />
+                        <span class="tool-settings__unit">seconds</span>
+                        <button
+                            class="apply-btn"
+                            type="button"
+                            :disabled="!canApplyConfirmationTimeout || confirmationTimeoutBusy"
+                            @click="applyConfirmationTimeout"
+                        >
+                            Apply
+                        </button>
+                    </div>
                 </div>
 
                 <div v-if="!toolPermissions" class="tools-empty">Loading tool settings...</div>
@@ -448,9 +496,12 @@
 import {
     MCP_DEFAULT_HOST,
     MCP_DEFAULT_PORT,
+    MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS,
+    MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS,
     MCP_PLUGIN_VERSION,
     type McpSettings,
     type ToolGroupMode,
+    type ToolPermissionProfile,
     type ToolPermissions,
 } from "shared";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
@@ -465,11 +516,14 @@ const settings = ref<McpSettings | undefined>(undefined);
 const toolPermissions = ref<ToolPermissions | undefined>(undefined);
 const toolBusy = ref<Record<string, boolean>>({});
 const bulkBusy = ref(false);
+const profileBusy = ref(false);
+const confirmationTimeoutBusy = ref(false);
 const enabled = ref(false);
 const loading = ref(true);
 const busy = ref(false);
 const draftHost = ref("");
 const draftPort = ref<number | undefined>(undefined);
+const draftConfirmationTimeoutSeconds = ref<number | undefined>(undefined);
 const mcpGuideOpen = ref(false);
 const apiGuideOpen = ref(false);
 const stopBackendEvents: Array<() => void> = [];
@@ -484,6 +538,10 @@ const toolModeOptions: { value: ToolGroupMode; label: string }[] = [
     { value: "auto", label: "Auto run" },
     { value: "confirm", label: "Ask to confirm" },
     { value: "disabled", label: "Disabled" },
+];
+const toolProfileOptions: { value: ToolPermissionProfile; label: string }[] = [
+    { value: "core", label: "Core" },
+    { value: "full", label: "Full" },
 ];
 
 const isLocked = computed(() => loading.value || busy.value);
@@ -503,6 +561,7 @@ const applySettings = (next: McpSettings) => {
     enabled.value = next.enabled;
     draftHost.value = next.host;
     draftPort.value = next.port;
+    draftConfirmationTimeoutSeconds.value = next.confirmationTimeoutSeconds;
 };
 
 const loadServerState = async () => {
@@ -560,6 +619,34 @@ const bulkLabel = computed(() => {
     if (mode === undefined) return "Mixed";
     return modeLabel(mode);
 });
+
+const profileLabel = computed(() => {
+    const profile = toolPermissions.value?.profile;
+    if (profile === "core") return "Core";
+    if (profile === "full") return "Full";
+    return "Custom";
+});
+
+const onProfileSelect = (profile: ToolPermissionProfile, event: Event) => {
+    const target = event.currentTarget;
+    if (target instanceof HTMLElement) {
+        const details = target.closest("details");
+        if (details) details.removeAttribute("open");
+    }
+    void applyToolProfile(profile);
+};
+
+const applyToolProfile = async (profile: ToolPermissionProfile) => {
+    if (profileBusy.value) return;
+    profileBusy.value = true;
+    try {
+        toolPermissions.value = await sdk.backend.applyToolPermissionProfile(profile);
+    } catch (err) {
+        sdk.window.showToast(`Failed to apply tool profile.\n${err}`, { variant: "error" });
+    } finally {
+        profileBusy.value = false;
+    }
+};
 
 const onBulkModeSelect = (mode: ToolGroupMode, event: Event) => {
     const target = event.currentTarget;
@@ -692,9 +779,19 @@ const apiGuideExamples = computed(() => [
         ),
     },
     {
+        method: "setToolConfirmationTimeout",
+        description: "Set how long confirmation-gated tools wait for approval.",
+        command: controlCurl('{"method":"setToolConfirmationTimeout","params":{"seconds":300}}'),
+    },
+    {
         method: "getToolGroupPermissionModes",
         description: "Read visible tool groups and their current modes.",
         command: controlCurl('{"method":"getToolGroupPermissionModes"}'),
+    },
+    {
+        method: "applyToolPermissionProfile",
+        description: "Apply the focused Core set or enable all operational groups with Full.",
+        command: controlCurl('{"method":"applyToolPermissionProfile","params":{"profile":"core"}}'),
     },
     {
         method: "setToolGroupPermissionMode",
@@ -711,6 +808,35 @@ const apiGuideExamples = computed(() => [
         ),
     },
 ]);
+
+const canApplyConfirmationTimeout = computed(() => {
+    const value = draftConfirmationTimeoutSeconds.value;
+    if (settings.value === undefined || value === undefined || !Number.isInteger(value)) {
+        return false;
+    }
+    return (
+        value >= MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS &&
+        value <= MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS &&
+        value !== settings.value.confirmationTimeoutSeconds
+    );
+});
+
+const applyConfirmationTimeout = async () => {
+    const seconds = draftConfirmationTimeoutSeconds.value;
+    if (seconds === undefined || !canApplyConfirmationTimeout.value) return;
+    confirmationTimeoutBusy.value = true;
+    try {
+        const next = await sdk.backend.setToolConfirmationTimeout(seconds);
+        applySettings(next);
+        sdk.window.showToast("Confirmation timeout updated.", { variant: "success" });
+    } catch (err) {
+        sdk.window.showToast(`Failed to update confirmation timeout.\n${err}`, {
+            variant: "error",
+        });
+    } finally {
+        confirmationTimeoutBusy.value = false;
+    }
+};
 
 const canApply = computed(() => {
     if (settings.value === undefined || settings.value === null) return false;

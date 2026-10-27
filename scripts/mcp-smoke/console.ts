@@ -5,7 +5,7 @@ export const runConsole = async (tools: Set<string>) => {
 
     logStep("Console");
 
-    await runIfTool("log", async () => {
-        await callTool("log", { level: "info", message: "mcp-smoke" });
+    await runIfTool("write_backend_log", async () => {
+        await callTool("write_backend_log", { level: "info", message: "mcp-smoke" });
     });
 };

@@ -5,7 +5,7 @@ A Caido MCP plugin that exposes a clean, safe, and well-documented tool surface 
 ## Highlights
 
 - **MCP-native**: exposes an MCP server over Streamable HTTP inside Caido.
-- **Tool governance**: group tools into safe/unsafe buckets and control them with `auto`, `confirm`, or `disabled` modes.
+- **Tool governance**: start with a focused `Core` profile, switch to `Full`, or customize each group with `auto`, `confirm`, and `disabled` modes.
 - **Clear UX**: user‑friendly tool names in the UI (no SDK internals).
 - **History-first output**: request and WebSocket tools use stable list/get envelopes, Caido-native filters, field projection, and bounded body serialization.
 
@@ -25,6 +25,7 @@ A Caido MCP plugin that exposes a clean, safe, and well-documented tool surface 
 ## Usage
 
 - Open the plugin page in Caido.
+- Keep the focused **Core** profile for normal agent work, or switch to **Full** when the peripheral Caido APIs are needed.
 - Use the **Tools** section to set each group to `auto`, `confirm`, or `disabled`.
 - Call tools from your agent and rely on consistent JSON outputs.
 
@@ -49,8 +50,9 @@ or `::1`. If MCP is bound to `0.0.0.0`, the control route is still served by tha
 but non-loopback peers receive `403`.
 
 Supported methods: `getMcpServerSettings`, `setMcpServerEnabled`,
-`updateMcpServerConfig`, `getToolGroupPermissionModes`, `setToolGroupPermissionMode`,
-and `setAllToolGroupPermissionModes`.
+`updateMcpServerConfig`, `setToolConfirmationTimeout`, `getToolGroupPermissionModes`,
+`applyToolPermissionProfile`, `setToolGroupPermissionMode`, and
+`setAllToolGroupPermissionModes`.
 
 ## Tooling Notes
 
@@ -59,6 +61,7 @@ and `setAllToolGroupPermissionModes`.
 - Broad history discovery should start with `list_requests` / `list_websocket_messages` and tight `fields`; exact follow-up should use `get_requests_by_ids` / `get_websocket_messages_by_ids`.
 - `list_requests` uses native Caido cursor pagination; feed `page_info.end_cursor`/`start_cursor` back as `cursor`.
 - `list_requests.filter` is a raw HTTPQL string for method, host, status, port, time, path, raw, and row constraints.
+- `list_websocket_streams.filter` is a raw StreamQL string applied by Caido before cursor pagination and counting.
 - HTTP body output uses `{ encoding, size, text|base64, omitted_reason }`. Raw request/response bytes are returned only when requested through `fields`.
 - `list_requests.serialization.include_body=false` by default for broad discovery; set it to `true` or request body/raw paths explicitly through `fields`.
 - Sitemap tools expose Caido's deduplicated Sitemap tree; use `list_sitemap_roots` / `list_sitemap_descendants` for tree discovery and `list_sitemap_entry_requests` for cursor-paginated requests attached to one entry.

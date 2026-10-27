@@ -15,7 +15,7 @@ export const registerConsoleTools = ({ server, sdk, store, permissions }: ToolCo
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.console.log",
         group: ToolGroupId.LogSafe,
-        toolName: "log",
+        toolName: "write_backend_log",
         description: "Write a log entry to the Caido backend console.",
         inputSchema: logSchema,
         handler: (params) => {

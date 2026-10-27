@@ -144,6 +144,47 @@
     gap: var(--mcp-space-3);
 }
 
+.tool-settings {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mcp-space-3);
+    padding: 0 0 var(--mcp-space-4);
+    margin-bottom: var(--mcp-space-4);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.tool-settings__info {
+    min-width: 0;
+}
+
+.tool-settings__control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--mcp-space-2);
+}
+
+.tool-settings__input {
+    width: 110px;
+}
+
+.tool-settings__unit {
+    color: var(--mcp-color-hint);
+    font-size: var(--mcp-text-sm);
+}
+
+.tool-profile {
+    display: flex;
+    align-items: center;
+    gap: var(--mcp-space-2);
+    min-width: 190px;
+}
+
+.tool-profile .label {
+    margin: 0;
+}
+
 .tool-row {
     display: flex;
     justify-content: space-between;

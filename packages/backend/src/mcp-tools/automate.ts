@@ -27,7 +27,13 @@ import { ToolGroupId } from "../tool-permissions";
 
 import { listHttpSerializationSchema } from "./http-serialization-schema";
 import { registerToolAction, type ToolContext } from "./register";
-import { ciEnum, HTTPQL_HELP_SHORT, stringifyResult, toId, validateHttpqlClause } from "./shared";
+import {
+    ciEnumDefault,
+    HTTPQL_HELP_SHORT,
+    stringifyResult,
+    toId,
+    validateHttpqlClause,
+} from "./shared";
 
 type PageInfo = {
     hasNextPage: boolean;
@@ -133,7 +139,7 @@ const paginationSchema = z
     .object({
         limit: z.number().int().min(1).max(500).default(50),
         cursor: z.string().min(1).optional(),
-        direction: ciEnum(["after", "before"]).default("after"),
+        direction: ciEnumDefault(["after", "before"], "after"),
     })
     .strict();
 
@@ -172,11 +178,11 @@ const listAutomateEntryRequestsSchema = z
         filter: z.string().min(1).optional(),
         limit: z.number().int().min(1).max(500).default(50),
         cursor: z.string().min(1).optional(),
-        direction: ciEnum(["after", "before"]).default("after"),
+        direction: ciEnumDefault(["after", "before"], "after"),
         order: z
             .object({
-                by: ciEnum(automateRequestOrderFields).default("POSITION"),
-                direction: ciEnum(["asc", "desc"]).default("asc"),
+                by: ciEnumDefault(automateRequestOrderFields, "POSITION"),
+                direction: ciEnumDefault(["asc", "desc"], "asc"),
             })
             .strict()
             .default({ by: "POSITION", direction: "asc" }),

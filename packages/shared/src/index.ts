@@ -2,6 +2,7 @@ export type McpSettings = {
     enabled: boolean;
     host: string;
     port: number;
+    confirmationTimeoutSeconds: number;
     url: string;
     controlUrl: string;
 };
@@ -10,6 +11,8 @@ export type McpConfigInput = {
     host: string;
     port: number;
 };
+
+export type ToolPermissionProfile = "core" | "full";
 
 export type McpServerState = {
     settings: McpSettings;
@@ -21,9 +24,11 @@ export type BackendAPI = {
     getMcpServerSettings: () => Promise<McpSettings>;
     setMcpServerEnabled: (enabled: boolean) => Promise<McpSettings>;
     updateMcpServerConfig: (config: McpConfigInput) => Promise<McpSettings>;
+    setToolConfirmationTimeout: (seconds: number) => Promise<McpSettings>;
     getToolGroupPermissionModes: () => Promise<ToolPermissions>;
     setToolGroupPermissionMode: (groupId: string, mode: ToolGroupMode) => Promise<ToolPermissions>;
     setAllToolGroupPermissionModes: (mode: ToolGroupMode) => Promise<ToolPermissions>;
+    applyToolPermissionProfile: (profile: ToolPermissionProfile) => Promise<ToolPermissions>;
     resolveToolActionConfirmation: (id: number, confirmed: boolean) => Promise<boolean>;
 };
 
@@ -53,10 +58,14 @@ export type ToolGroup = {
 export type ToolPermissions = {
     groups: ToolGroup[];
     states: Record<string, ToolGroupMode>;
+    profile: ToolPermissionProfile | "custom";
 };
 
 export const MCP_DEFAULT_HOST = "127.0.0.1";
 export const MCP_DEFAULT_PORT = 3333;
+export const MCP_DEFAULT_CONFIRMATION_TIMEOUT_SECONDS = 5 * 60;
+export const MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS = 5;
+export const MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS = 3600;
 export const MCP_ENDPOINT_PATH = "/mcp";
 export const MCP_CONTROL_ENDPOINT_PATH = "/control";
 export const MCP_PLUGIN_VERSION = "4.0.0";

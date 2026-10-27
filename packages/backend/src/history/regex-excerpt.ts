@@ -9,9 +9,16 @@ export type RegexExcerptConfig = {
     contextChars: number;
 };
 
+export const MAX_REGEX_EXCERPT_PATTERN_CHARS = 4096;
+export const MAX_REGEX_EXCERPT_CONTEXT_CHARS = 4096;
+export const MAX_REGEX_EXCERPTS = 1000;
+
 export const compileRegex = (regex: string | undefined, field: string) => {
     const value = regex?.trim() ?? "";
     if (value.length === 0) return undefined;
+    if (value.length > MAX_REGEX_EXCERPT_PATTERN_CHARS) {
+        throw new Error(`${field} must be at most ${MAX_REGEX_EXCERPT_PATTERN_CHARS} characters`);
+    }
     try {
         return new RegExp(value);
     } catch (error) {
@@ -31,7 +38,10 @@ export const resolveRegexExcerpt = (
     }
     return {
         pattern,
-        contextChars: Math.max(0, input.context_chars ?? 10),
+        contextChars: Math.min(
+            MAX_REGEX_EXCERPT_CONTEXT_CHARS,
+            Math.max(0, input.context_chars ?? 10),
+        ),
     };
 };
 
@@ -59,8 +69,9 @@ export const buildMatchContext = (
 ): MatchContext | undefined => {
     if (config === undefined) return undefined;
     const excerpts = [];
+    let truncated = false;
     const bodyRawExcerptKeys = new Set<string>();
-    for (const source of sources) {
+    sourceLoop: for (const source of sources) {
         if (source.text === undefined || source.text === null || source.text === "") continue;
         const flags = config.pattern.flags.includes("g")
             ? config.pattern.flags
@@ -76,6 +87,10 @@ export const buildMatchContext = (
                 match = pattern.exec(source.text);
                 continue;
             }
+            if (excerpts.length >= MAX_REGEX_EXCERPTS) {
+                truncated = true;
+                break sourceLoop;
+            }
             excerpts.push({
                 path: source.path,
                 text,
@@ -85,7 +100,7 @@ export const buildMatchContext = (
             match = pattern.exec(source.text);
         }
     }
-    return excerpts.length > 0 ? { excerpts } : undefined;
+    return excerpts.length > 0 ? { excerpts, truncated: truncated || undefined } : undefined;
 };
 
 export type RegexExcerptInputSchema = RegexExcerptInput;

@@ -56,8 +56,8 @@ export const runReplay = async (tools: Set<string>) => {
             assert(collectionId !== null, "replay collection id missing");
         });
 
-        await runIfTool("query_replay_collections", async () => {
-            await callTool("query_replay_collections", { first: 5 });
+        await runIfTool("list_replay_collections", async () => {
+            await callTool("list_replay_collections", { first: 5 });
         });
 
         await runIfTool("list_replay_collections_detailed", async () => {
@@ -113,8 +113,8 @@ export const runReplay = async (tools: Set<string>) => {
             }
         });
 
-        await runIfTool("query_replay_sessions", async () => {
-            const res = await callTool("query_replay_sessions", { first: 5 });
+        await runIfTool("list_replay_sessions", async () => {
+            const res = await callTool("list_replay_sessions", { first: 5 });
             const text = getToolText(res);
             const parsed = tryParseJSON<{ replay_sessions?: { nodes?: Array<any> } }>(text);
             const first = parsed?.replay_sessions?.nodes?.[0]?.id ?? null;

@@ -31,6 +31,7 @@ import { registerToolAction, type ToolContext } from "./register";
 import type { SerializationOptions } from "./shared";
 import {
     ciEnum,
+    ciEnumDefault,
     HTTPQL_HELP_SHORT,
     serializeRequest,
     serializeResponse,
@@ -367,7 +368,8 @@ const pipelineFailureBehaviorSchema = ciEnum(["abort_on_partial", "fire_on_parti
 
 const replayPipelineStrategySchema = z
     .object({
-        type: ciEnum(["sequential", "last_byte_synchronization", "single_packet_attack"]).default(
+        type: ciEnumDefault(
+            ["sequential", "last_byte_synchronization", "single_packet_attack"],
             "sequential",
         ),
         abort_on_failure: z.boolean().optional(),
@@ -785,8 +787,8 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.listCollectionsGql",
-        group: ToolGroupId.ReplaySafe,
-        toolName: "query_replay_collections",
+        group: ToolGroupId.ReplayRead,
+        toolName: "list_replay_collections",
         description: "List Replay collections with cursor pagination.",
         inputSchema: paginationSchema,
         handler: async (params) => {
@@ -802,7 +804,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.listCollectionsDetailed",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayRead,
         toolName: "list_replay_collections_detailed",
         description:
             "List Replay collections with nested sessions and entries. " +
@@ -893,8 +895,8 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.listSessions",
-        group: ToolGroupId.ReplaySafe,
-        toolName: "query_replay_sessions",
+        group: ToolGroupId.ReplayRead,
+        toolName: "list_replay_sessions",
         description: "List Replay sessions with cursor pagination.",
         inputSchema: paginationSchema,
         handler: async (params) => {
@@ -910,7 +912,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.getSession",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayRead,
         toolName: "get_replay_session",
         description: "Get Replay sessions by ID.",
         inputSchema: replayGetSessionSchema,
@@ -944,7 +946,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.getEntry",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayRead,
         toolName: "get_replay_entry",
         description:
             "Get Replay entries by ID. " +
@@ -1032,7 +1034,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.createSession",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayPrepare,
         toolName: "create_replay_session",
         description:
             "Create Replay sessions from saved request IDs, crafted raw HTTP requests, or both. " +
@@ -1123,7 +1125,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.sendToReplay",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayPrepare,
         toolName: "send_to_replay",
         description:
             "Create Replay sessions from request IDs. " +
@@ -1145,7 +1147,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.sendToReplayFromFilter",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayPrepare,
         toolName: "send_to_replay_from_filter",
         description:
             "Create Replay sessions from requests matched by an HTTPQL filter. " +
@@ -1185,7 +1187,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.createPipelineSession",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayPrepare,
         toolName: "create_replay_pipeline_session",
         description:
             "Create a Replay HTTP pipeline session from saved request IDs. " +
@@ -1282,7 +1284,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.setPipelineActiveHttpEntry",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayPrepare,
         toolName: "set_replay_pipeline_active_http_entry",
         description:
             "Set the active HTTP entry inside a Replay pipeline entry. This changes Replay state but does not send traffic.",
@@ -1302,7 +1304,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.createCollection",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayManage,
         toolName: "create_replay_collection",
         description: "Create Replay collections.",
         inputSchema: replayCreateCollectionSchema,
@@ -1327,7 +1329,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.moveSession",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayManage,
         toolName: "move_replay_session",
         description: "Move Replay sessions to a collection.",
         inputSchema: moveReplaySessionSchema,
@@ -1361,7 +1363,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.startTask",
-        group: ToolGroupId.ReplayUnsafe,
+        group: ToolGroupId.ReplayExecute,
         toolName: "start_replay_task",
         description:
             "Execute Replay sessions by ID: sends each session's current request and records the task. " +
@@ -1386,7 +1388,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.renameCollection",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayManage,
         toolName: "rename_replay_collection",
         description: "Rename Replay collections.",
         inputSchema: replayRenameCollectionSchema,
@@ -1411,7 +1413,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.renameSession",
-        group: ToolGroupId.ReplaySafe,
+        group: ToolGroupId.ReplayManage,
         toolName: "rename_replay_session",
         description: "Rename Replay sessions.",
         inputSchema: replayRenameSessionSchema,
@@ -1436,7 +1438,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.deleteCollection",
-        group: ToolGroupId.ReplayUnsafe,
+        group: ToolGroupId.ReplayManage,
         toolName: "delete_replay_collection",
         description: "Delete Replay collections by ID.",
         inputSchema: replayDeleteCollectionSchema,
@@ -1458,7 +1460,7 @@ export const registerReplayTools = ({ server, sdk, graphql, store, permissions }
 
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.replay.deleteSessions",
-        group: ToolGroupId.ReplayUnsafe,
+        group: ToolGroupId.ReplayManage,
         toolName: "delete_replay_session",
         description: "Delete Replay sessions by ID.",
         inputSchema: replayDeleteSessionsSchema,

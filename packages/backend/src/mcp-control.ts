@@ -1,7 +1,15 @@
 import { Buffer } from "buffer";
 
 import { Blob, Response } from "caido:http";
-import type { McpConfigInput, McpSettings, ToolGroupMode, ToolPermissions } from "shared";
+import {
+    MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS,
+    MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS,
+    type McpConfigInput,
+    type McpSettings,
+    type ToolGroupMode,
+    type ToolPermissionProfile,
+    type ToolPermissions,
+} from "shared";
 import { z } from "zod";
 
 import type { HttpHandler } from "./server";
@@ -10,9 +18,11 @@ type ControlOperations = {
     getMcpServerSettings: () => McpSettings;
     setMcpServerEnabled: (enabled: boolean) => Promise<McpSettings>;
     updateMcpServerConfig: (config: McpConfigInput) => Promise<McpSettings>;
+    setToolConfirmationTimeout: (seconds: number) => Promise<McpSettings>;
     getToolGroupPermissionModes: () => ToolPermissions;
     setToolGroupPermissionMode: (groupId: string, mode: ToolGroupMode) => Promise<ToolPermissions>;
     setAllToolGroupPermissionModes: (mode: ToolGroupMode) => Promise<ToolPermissions>;
+    applyToolPermissionProfile: (profile: ToolPermissionProfile) => Promise<ToolPermissions>;
 };
 
 const controlRequestSchema = z
@@ -21,9 +31,11 @@ const controlRequestSchema = z
             "getMcpServerSettings",
             "setMcpServerEnabled",
             "updateMcpServerConfig",
+            "setToolConfirmationTimeout",
             "getToolGroupPermissionModes",
             "setToolGroupPermissionMode",
             "setAllToolGroupPermissionModes",
+            "applyToolPermissionProfile",
         ]),
         params: z.unknown().optional(),
     })
@@ -35,6 +47,15 @@ const updateMcpServerConfigParamsSchema = z
     .object({
         host: z.string().trim().min(1),
         port: z.number().int().min(1).max(65535),
+    })
+    .strict();
+const setToolConfirmationTimeoutParamsSchema = z
+    .object({
+        seconds: z
+            .number()
+            .int()
+            .min(MCP_MIN_CONFIRMATION_TIMEOUT_SECONDS)
+            .max(MCP_MAX_CONFIRMATION_TIMEOUT_SECONDS),
     })
     .strict();
 const toolGroupModeSchema = z.union([
@@ -49,6 +70,9 @@ const setToolGroupPermissionModeParamsSchema = z
     })
     .strict();
 const setAllToolGroupPermissionModesParamsSchema = z.object({ mode: toolGroupModeSchema }).strict();
+const applyToolPermissionProfileParamsSchema = z
+    .object({ profile: z.enum(["core", "full"]) })
+    .strict();
 
 const jsonResponse = (body: unknown, status = 200) =>
     new Response(new Blob([JSON.stringify(body)]), {
@@ -124,6 +148,13 @@ export function createMcpControlHandler(operations: ControlOperations): HttpHand
                     const result = await operations.updateMcpServerConfig(params);
                     return jsonResponse({ ok: true, result });
                 }
+                case "setToolConfirmationTimeout": {
+                    const params = setToolConfirmationTimeoutParamsSchema.parse(
+                        normalizeParams(payload.params),
+                    );
+                    const result = await operations.setToolConfirmationTimeout(params.seconds);
+                    return jsonResponse({ ok: true, result });
+                }
                 case "getToolGroupPermissionModes": {
                     emptyParamsSchema.parse(normalizeParams(payload.params));
                     return jsonResponse({
@@ -146,6 +177,13 @@ export function createMcpControlHandler(operations: ControlOperations): HttpHand
                         normalizeParams(payload.params),
                     );
                     const result = await operations.setAllToolGroupPermissionModes(params.mode);
+                    return jsonResponse({ ok: true, result });
+                }
+                case "applyToolPermissionProfile": {
+                    const params = applyToolPermissionProfileParamsSchema.parse(
+                        normalizeParams(payload.params),
+                    );
+                    const result = await operations.applyToolPermissionProfile(params.profile);
                     return jsonResponse({ ok: true, result });
                 }
             }

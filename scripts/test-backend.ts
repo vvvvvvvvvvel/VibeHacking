@@ -3,12 +3,19 @@ import { mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
+import { ConfirmActionStore } from "../packages/backend/src/confirm-actions";
 import { executeGraphql } from "../packages/backend/src/graphql/execute";
+import {
+    buildMatchContext,
+    compileRegex,
+    MAX_REGEX_EXCERPTS,
+} from "../packages/backend/src/history";
 import { McpSettingsStore } from "../packages/backend/src/mcp-settings";
 import {
     decodeRawHttpRequest,
     rawHttpRequestSchema,
 } from "../packages/backend/src/mcp-tools/raw-request";
+import { ciEnumDefault } from "../packages/backend/src/mcp-tools/shared";
 import { ToolPermissionsStore } from "../packages/backend/src/tool-permissions";
 import type { KVSDK, KVValue, MCPSDK } from "../packages/backend/src/types/sdk";
 
@@ -69,7 +76,12 @@ const testSettingsMigration = async () => {
     const store = new McpSettingsStore(makeSdk(directory, kv));
     const snapshot = await store.load();
 
-    assert.deepEqual(snapshot, { enabled: true, host: "127.0.0.2", port: 4444 });
+    assert.deepEqual(snapshot, {
+        enabled: true,
+        host: "127.0.0.2",
+        port: 4444,
+        confirmationTimeoutSeconds: 300,
+    });
     assert.deepEqual(kv.values.get("mcp-server-settings"), snapshot);
     await assertCleared(legacyPath);
 };
@@ -94,8 +106,8 @@ const testPermissionMigration = async () => {
     const permissions = store.getPermissions();
     assert.equal(permissions.states["tamper-safe"], "disabled");
     assert.equal(permissions.states["request-safe"], "confirm");
-    assert.equal(permissions.states["automate-safe"], "auto");
-    assert.equal(permissions.states["proxy-traffic-control-safe"], "auto");
+    assert.equal(permissions.states["automate-safe"], "disabled");
+    assert.equal(permissions.states["proxy-traffic-control-safe"], "disabled");
     assert.equal("temper-safe" in permissions.states, false);
     assert.equal("proxy-passthrough-safe" in permissions.states, false);
     await assertCleared(legacyPath);
@@ -154,6 +166,45 @@ const testPermissionSnapshotsAreIsolated = async () => {
     );
 };
 
+const testPermissionProfiles = async () => {
+    const directory = await mkdtemp(join(tmpdir(), "caido-mcp-permission-profiles-"));
+    const permissions = new ToolPermissionsStore(makeSdk(directory));
+    await permissions.load();
+
+    assert.equal(permissions.getPermissions().profile, "core");
+    const full = await permissions.applyProfile("full");
+    assert.equal(full.profile, "full");
+    assert.equal(full.states["env-safe"], "auto");
+    assert.equal(full.states["env-unsafe"], "confirm");
+    assert.equal(full.states["replay-manage"], "confirm");
+
+    const custom = await permissions.setGroupMode("env-safe", "disabled");
+    assert.equal(custom.profile, "custom");
+};
+
+const testConfirmationTimeout = async () => {
+    const store = new ConfirmActionStore(() => 10);
+    const pending = store.createPendingAction("test.action", { value: 1 }, () =>
+        Promise.resolve("ok"),
+    );
+    const result = await pending.promise;
+
+    assert.equal(result.confirmed, false);
+    assert.match(result.error ?? "", /timed out/);
+    assert.equal(await store.resolveToolActionConfirmation(pending.id, true), null);
+};
+
+const testConfirmationResolutionClearsTimeout = async () => {
+    const store = new ConfirmActionStore(() => 1000);
+    const pending = store.createPendingAction("test.action", {}, () => Promise.resolve("ok"));
+    const resolved = await store.resolveToolActionConfirmation(pending.id, true);
+    const result = await pending.promise;
+
+    assert.equal(resolved?.result, "ok");
+    assert.equal(result.confirmed, true);
+    assert.equal(result.error, undefined);
+};
+
 const testGraphqlErrorsPropagate = async () => {
     const sdk = {
         graphql: {
@@ -209,6 +260,21 @@ const testRawHttpRequestInput = () => {
     );
 };
 
+const testRegexExcerptGuardrails = () => {
+    assert.throws(() => compileRegex("x".repeat(4097), "regex"), /at most 4096/);
+    const context = buildMatchContext(
+        [{ path: "response.body.text", text: "x".repeat(MAX_REGEX_EXCERPTS + 1) }],
+        { pattern: /x/, contextChars: 0 },
+    );
+    assert.equal(context?.excerpts.length, MAX_REGEX_EXCERPTS);
+    assert.equal(context?.truncated, true);
+};
+
+const testCaseInsensitiveEnumPublishesDefault = () => {
+    const metadata = ciEnumDefault(["after", "before"], "after").meta();
+    assert.equal(metadata?.default, "after");
+};
+
 const testKvWinsAfterMigration = async () => {
     const directory = await mkdtemp(join(tmpdir(), "caido-mcp-kv-first-"));
     const legacyPath = join(directory, "settings.json");
@@ -220,7 +286,12 @@ const testKvWinsAfterMigration = async () => {
         port: 2222,
     });
     const store = new McpSettingsStore(makeSdk(directory, kv));
-    assert.deepEqual(await store.load(), { enabled: true, host: "kv", port: 2222 });
+    assert.deepEqual(await store.load(), {
+        enabled: true,
+        host: "kv",
+        port: 2222,
+        confirmationTimeoutSeconds: 300,
+    });
     await assertCleared(legacyPath);
 };
 
@@ -233,6 +304,7 @@ const testNullKvValueIsTreatedAsMissing = async () => {
         enabled: false,
         host: "127.0.0.1",
         port: 3333,
+        confirmationTimeoutSeconds: 300,
     });
 
     const permissionsKv = new MemoryKv(true);
@@ -248,9 +320,14 @@ const main = async () => {
     await testPersistenceFailuresPropagate();
     await testPermissionMutationsAreSerialized();
     await testPermissionSnapshotsAreIsolated();
+    await testPermissionProfiles();
+    await testConfirmationTimeout();
+    await testConfirmationResolutionClearsTimeout();
     await testGraphqlErrorsPropagate();
     await testGraphqlVariablesDefaultToObject();
     testRawHttpRequestInput();
+    testRegexExcerptGuardrails();
+    testCaseInsensitiveEnumPublishesDefault();
     await testKvWinsAfterMigration();
     await testNullKvValueIsTreatedAsMissing();
 };

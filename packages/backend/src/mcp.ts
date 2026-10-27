@@ -3,6 +3,7 @@ import {
     MCP_ENDPOINT_PATH,
     type McpServerState,
     type McpSettings,
+    type ToolPermissionProfile,
 } from "shared";
 
 import { ConfirmActionStore } from "./confirm-actions";
@@ -35,7 +36,7 @@ export class McpHttpServer {
 
     constructor(sdk: MCPSDK, opts: McpServerOptions = {}) {
         this.settingsStore = new McpSettingsStore(sdk);
-        this.confirmStore = new ConfirmActionStore();
+        this.confirmStore = new ConfirmActionStore(() => this.settingsStore.confirmationTimeoutMs);
         this.permissionsStore = new ToolPermissionsStore(sdk);
         this.runtime = new McpRuntime(sdk, this.confirmStore, this.permissionsStore);
         this.sdk = sdk;
@@ -43,11 +44,15 @@ export class McpHttpServer {
             getMcpServerSettings: () => this.getMcpServerSettings(),
             setMcpServerEnabled: async (enabled) => await this.setMcpServerEnabled(enabled),
             updateMcpServerConfig: async (config) => await this.updateMcpServerConfig(config),
+            setToolConfirmationTimeout: async (seconds) =>
+                await this.setToolConfirmationTimeout(seconds),
             getToolGroupPermissionModes: () => this.getToolGroupPermissionModes(),
             setToolGroupPermissionMode: async (groupId, mode) =>
                 await this.setToolGroupPermissionMode(groupId, mode),
             setAllToolGroupPermissionModes: async (mode) =>
                 await this.setAllToolGroupPermissionModes(mode),
+            applyToolPermissionProfile: async (profile) =>
+                await this.applyToolPermissionProfile(profile),
         });
         this.listeners = new McpListenerManager({
             sdk,
@@ -131,6 +136,29 @@ export class McpHttpServer {
         this.runtime.applyToolPermissions();
         this.emitToolPermissionsChanged(next);
         return next;
+    }
+
+    async applyToolPermissionProfile(profile: ToolPermissionProfile) {
+        const next = await this.permissionsStore.applyProfile(profile);
+        this.runtime.applyToolPermissions();
+        this.emitToolPermissionsChanged(next);
+        return next;
+    }
+
+    setToolConfirmationTimeout(seconds: number): Promise<McpSettings> {
+        return this.enqueueSettingsMutation(async () => {
+            const previous = this.settingsStore.getSnapshot();
+            this.settingsStore.setToolConfirmationTimeout(seconds);
+            try {
+                await this.settingsStore.save();
+            } catch (error) {
+                this.settingsStore.applySnapshot(previous);
+                throw error;
+            }
+            const settings = this.getMcpServerSettings();
+            this.emitSettingsChanged(settings);
+            return settings;
+        });
     }
 
     setMcpServerEnabled(enabled: boolean): Promise<McpSettings> {

@@ -170,7 +170,7 @@ List streams first, then page messages for a selected stream:
 ```json
 {
     "limit": 50,
-    "protocol": "WS",
+    "filter": "stream.protocol.eq:\"WS\"",
     "order": { "by": "ID", "ordering": "DESC" }
 }
 ```

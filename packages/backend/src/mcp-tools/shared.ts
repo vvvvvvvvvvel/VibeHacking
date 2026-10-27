@@ -23,8 +23,14 @@ export const ciEnum = <const T extends readonly [string, ...string[]]>(values: T
         z.enum(values),
     );
 
+export const ciEnumDefault = <const T extends readonly [string, ...string[]]>(
+    values: T,
+    defaultValue: T[number],
+) => ciEnum(values).default(defaultValue).meta({ default: defaultValue });
+
 export type ToolResult = {
     content: { type: "text"; text: string }[];
+    isError?: boolean;
 };
 
 export const HTTPQL_HELP_SHORT = [

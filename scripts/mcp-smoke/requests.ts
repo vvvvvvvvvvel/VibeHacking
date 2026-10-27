@@ -216,15 +216,19 @@ export const runRequests = async (tools: Set<string>) => {
     });
 
     await runIfTool("summarize_request_cookies", async () => {
-        await callTool("summarize_request_cookies", {
+        const result = await callTool("summarize_request_cookies", {
             limit: 10,
         });
+        const payload = tryParseJSON<{ page_info?: unknown }>(getToolText(result));
+        assert(payload?.page_info !== undefined, "cookie summary page_info missing");
     });
 
     await runIfTool("summarize_request_auth_headers", async () => {
-        await callTool("summarize_request_auth_headers", {
+        const result = await callTool("summarize_request_auth_headers", {
             limit: 10,
         });
+        const payload = tryParseJSON<{ page_info?: unknown }>(getToolText(result));
+        assert(payload?.page_info !== undefined, "auth header summary page_info missing");
     });
 
     await runIfTool("send_requests", async () => {

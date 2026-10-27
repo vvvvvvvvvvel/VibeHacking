@@ -28,7 +28,7 @@ import type {
 import { ToolGroupId } from "../tool-permissions";
 
 import { registerToolAction, type ToolContext } from "./register";
-import { ciEnum, stringifyResult, toNumericId } from "./shared";
+import { ciEnumDefault, stringifyResult, toNumericId } from "./shared";
 
 type StreamNode = {
     id: string;
@@ -124,7 +124,7 @@ const idArraySchema = z.array(idSchema).min(1);
 const wsOrderSchema = z
     .object({
         by: z.enum(["ID"]).default("ID"),
-        ordering: ciEnum(["ASC", "DESC"]).default("DESC"),
+        ordering: ciEnumDefault(["ASC", "DESC"], "DESC"),
     })
     .strict()
     .default({ by: "ID", ordering: "DESC" });
@@ -132,7 +132,7 @@ const wsOrderSchema = z
 const cursorPaginationSchema = z.object({
     limit: z.number().int().min(1).max(500).default(50),
     cursor: z.string().min(1).optional(),
-    direction: ciEnum(["after", "before"]).default("after"),
+    direction: ciEnumDefault(["after", "before"], "after"),
 });
 
 const defaultWebSocketSerialization = {
@@ -165,8 +165,7 @@ const websocketSerializationSchema = z
 const listStreamsSchema = z
     .object({
         ...cursorPaginationSchema.shape,
-        protocol: ciEnum(["WS", "SSE"]).default("WS"),
-        stream_direction: ciEnum(["BOTH", "CLIENT", "SERVER"]).optional(),
+        filter: z.string().min(1).optional(),
         scope_id: idSchema.nullable().default(null),
         order: wsOrderSchema,
     })
@@ -296,6 +295,7 @@ const queryWebSocketStreams = async (
 ) => {
     const response = await graphql.execute<StreamsResponse>(LIST_STREAMS_QUERY, {
         ...cursorVariables(input),
+        filter: input.filter === undefined ? undefined : { code: input.filter },
         scopeId: input.scope_id ?? undefined,
         order: input.order,
     });
@@ -313,13 +313,6 @@ const queryWebSocketStreams = async (
                 const stream = normalizeStream(edge.node);
                 return stream === undefined ? null : { cursor: edge.cursor, ...stream };
             })
-            // The `streams` query no longer accepts a protocol argument; filter client-side.
-            .filter((item) => item === null || item.protocol === input.protocol)
-            .filter((item) =>
-                item === null || input.stream_direction === undefined
-                    ? true
-                    : item.direction === input.stream_direction,
-            )
             .filter((item) => item !== null),
     };
 };
@@ -370,8 +363,9 @@ export const registerWebsocketTools = ({
         group: ToolGroupId.WsSafe,
         toolName: "list_websocket_streams",
         description:
-            "List WebSocket/SSE streams with native cursor pagination and optional stream direction filtering. " +
-            'Example: { "limit": 50, "protocol": "WS", "stream_direction": "BOTH" }.',
+            "List WebSocket/SSE streams with native cursor pagination and StreamQL filtering. " +
+            'Examples: { "limit": 50, "filter": "stream.protocol.eq:\\"WS\\"" } or ' +
+            '{ "filter": "stream.host.eq:\\"api.example.com\\" AND ws.direction.eq:\\"client\\"" }.',
         inputSchema: listStreamsSchema,
         handler: async (params) => {
             const input = listStreamsSchema.parse(params);

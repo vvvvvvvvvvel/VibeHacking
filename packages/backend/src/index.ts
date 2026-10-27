@@ -20,6 +20,9 @@ export function init(sdk: MCPSDK) {
             return await mcp.updateMcpServerConfig(config);
         },
     );
+    sdk.api.register("setToolConfirmationTimeout", async (_sdk: MCPSDK, seconds: number) => {
+        return await mcp.setToolConfirmationTimeout(seconds);
+    });
     sdk.api.register("getToolGroupPermissionModes", () => {
         return Promise.resolve(mcp.getToolGroupPermissionModes());
     });
@@ -33,6 +36,12 @@ export function init(sdk: MCPSDK) {
         "setAllToolGroupPermissionModes",
         async (_sdk: MCPSDK, mode: "auto" | "confirm" | "disabled") => {
             return await mcp.setAllToolGroupPermissionModes(mode);
+        },
+    );
+    sdk.api.register(
+        "applyToolPermissionProfile",
+        async (_sdk: MCPSDK, profile: "core" | "full") => {
+            return await mcp.applyToolPermissionProfile(profile);
         },
     );
     sdk.api.register(

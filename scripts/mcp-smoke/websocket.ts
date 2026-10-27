@@ -10,42 +10,41 @@ export const runWebsocket = async (tools: Set<string>) => {
     await runIfTool("list_websocket_streams", async () => {
         const res = await callTool("list_websocket_streams", {
             limit: 10,
-            protocol: "WS",
+            filter: 'stream.protocol.eq:"WS"',
         });
         const text = getToolText(res);
         const data = tryParseJSON<{
             page_info?: any;
             count?: number;
-            items?: Array<{ id?: string | number; direction?: string }>;
+            items?: Array<{ id?: string | number; host?: string; protocol?: string }>;
         }>(text);
         assert(data?.page_info !== undefined, "list_websocket_streams page_info missing");
         assert(typeof data?.count === "number", "list_websocket_streams count should be number");
         assert(Array.isArray(data?.items), "list_websocket_streams items missing");
         const id = data?.items?.[0]?.id;
         stream_id = id != null ? String(id) : stream_id;
-        const streamDirection = data?.items?.[0]?.direction;
-        if (
-            streamDirection === "BOTH" ||
-            streamDirection === "CLIENT" ||
-            streamDirection === "SERVER"
-        ) {
-            const filteredByDirection = await callTool("list_websocket_streams", {
+        assert(
+            data?.items?.every((item) => item.protocol === "WS") ?? false,
+            "StreamQL protocol filter should be applied before pagination",
+        );
+        const streamHost = data?.items?.[0]?.host;
+        if (streamHost !== undefined) {
+            const filteredByHost = await callTool("list_websocket_streams", {
                 limit: 10,
-                protocol: "WS",
-                stream_direction: streamDirection,
+                filter: `stream.host.eq:${JSON.stringify(streamHost)}`,
             });
             const filteredData = tryParseJSON<{
-                items?: Array<{ direction?: string }>;
-            }>(getToolText(filteredByDirection));
+                items?: Array<{ host?: string }>;
+            }>(getToolText(filteredByHost));
             assert(
-                filteredData?.items?.every((item) => item.direction === streamDirection) ?? false,
-                "stream_direction should filter streams",
+                filteredData?.items?.every((item) => item.host === streamHost) ?? false,
+                "StreamQL host filter should filter streams",
             );
         }
 
         const firstPage = await callTool("list_websocket_streams", {
             limit: 1,
-            protocol: "WS",
+            filter: 'stream.protocol.eq:"WS"',
         });
         const firstData = tryParseJSON<{
             page_info?: any;
@@ -57,7 +56,7 @@ export const runWebsocket = async (tools: Set<string>) => {
         if (firstCursorItem?.id != null && firstData?.page_info?.has_next_page) {
             const nextPage = await callTool("list_websocket_streams", {
                 limit: 1,
-                protocol: "WS",
+                filter: 'stream.protocol.eq:"WS"',
                 cursor: firstData.page_info.end_cursor,
             });
             const nextData = tryParseJSON<{
@@ -72,7 +71,7 @@ export const runWebsocket = async (tools: Set<string>) => {
             );
             const backPage = await callTool("list_websocket_streams", {
                 limit: 1,
-                protocol: "WS",
+                filter: 'stream.protocol.eq:"WS"',
                 cursor: nextData?.page_info?.start_cursor,
                 direction: "before",
             });
@@ -87,7 +86,7 @@ export const runWebsocket = async (tools: Set<string>) => {
 
         const ascPage = await callTool("list_websocket_streams", {
             limit: 1,
-            protocol: "WS",
+            filter: 'stream.protocol.eq:"WS"',
             order: { by: "ID", ordering: "ASC" },
         });
         const ascData = tryParseJSON<{ items?: Array<{ id?: string | number }> }>(

@@ -37,6 +37,16 @@
         align-items: flex-start;
     }
 
+    .tool-settings {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .tool-settings__control {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
     .tool-controls {
         width: 100%;
         justify-content: flex-start;

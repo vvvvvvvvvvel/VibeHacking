@@ -22,7 +22,7 @@ import { ToolGroupId } from "../tool-permissions";
 
 import { listHttpSerializationSchema } from "./http-serialization-schema";
 import { registerToolAction, type ToolContext } from "./register";
-import { ciEnum, stringifyResult, toDedupeKey, toId, toNumericId } from "./shared";
+import { ciEnumDefault, stringifyResult, toDedupeKey, toId, toNumericId } from "./shared";
 
 type FindingNode = {
     id: string;
@@ -181,10 +181,11 @@ export const registerFindingsTools = ({
         .strict();
     const findingOrderSchema = z
         .object({
-            by: ciEnum(["ID", "TITLE", "HOST", "PATH", "REPORTER", "CREATED_AT"]).default(
+            by: ciEnumDefault(
+                ["ID", "TITLE", "HOST", "PATH", "REPORTER", "CREATED_AT"],
                 "CREATED_AT",
             ),
-            ordering: ciEnum(["ASC", "DESC"]).default("DESC"),
+            ordering: ciEnumDefault(["ASC", "DESC"], "DESC"),
         })
         .strict()
         .default({ by: "CREATED_AT", ordering: "DESC" });
@@ -196,7 +197,7 @@ export const registerFindingsTools = ({
                 .transform((value) => value ?? undefined),
             limit: z.number().int().min(1).max(500).default(50),
             cursor: z.string().min(1).optional(),
-            direction: ciEnum(["after", "before"]).default("after"),
+            direction: ciEnumDefault(["after", "before"], "after"),
             order: findingOrderSchema,
             include_http: z.boolean().default(false),
             serialization: listHttpSerializationSchema,
@@ -357,7 +358,7 @@ export const registerFindingsTools = ({
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.findings.get",
         group: ToolGroupId.FindingSafe,
-        toolName: "get_finding",
+        toolName: "lookup_findings",
         description:
             "Get findings by ids, request_ids, or dedupe_keys; provide exactly one lookup mode.",
         inputSchema: findingGetSchema,
@@ -449,7 +450,7 @@ export const registerFindingsTools = ({
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.findings.exists",
         group: ToolGroupId.FindingSafe,
-        toolName: "finding_exists",
+        toolName: "check_findings_exist",
         description:
             "Check finding existence by request_ids or dedupe_keys; provide exactly one lookup mode.",
         inputSchema: findingExistsSchema,

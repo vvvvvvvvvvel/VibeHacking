@@ -213,7 +213,7 @@ List streams first, then messages by stream:
 ```json
 {
     "limit": 50,
-    "protocol": "WS",
+    "filter": "stream.protocol.eq:\"WS\"",
     "order": { "by": "ID", "ordering": "DESC" }
 }
 ```

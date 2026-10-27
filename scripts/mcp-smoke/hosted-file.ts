@@ -12,7 +12,7 @@ export const runHostedFile = async (tools: Set<string>) => {
         const createJson = tryParseJSON<{ id?: string }>(createText);
         const createdId = createJson?.id;
         assert(createdId, "hosted file id missing after create");
-        const listRes = await callTool("get_hosted_file", {});
+        const listRes = await callTool("list_hosted_files", {});
         const listText = getToolText(listRes);
         const listJson = tryParseJSON<unknown>(listText);
         const files = Array.isArray(listJson)
@@ -23,7 +23,7 @@ export const runHostedFile = async (tools: Set<string>) => {
 
         await runIfTool("delete_hosted_file", async () => {
             await callTool("delete_hosted_file", { id: createdId });
-            const afterDeleteRes = await callTool("get_hosted_file", {});
+            const afterDeleteRes = await callTool("list_hosted_files", {});
             const afterDeleteText = getToolText(afterDeleteRes);
             const afterDeleteJson = tryParseJSON<unknown>(afterDeleteText);
             const afterFiles = Array.isArray(afterDeleteJson)

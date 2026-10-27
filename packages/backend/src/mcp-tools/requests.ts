@@ -31,7 +31,7 @@ import {
 } from "./raw-request";
 import { registerToolAction, type ToolContext } from "./register";
 import {
-    ciEnum,
+    ciEnumDefault,
     HTTPQL_HELP_SHORT,
     stringifyResult,
     toCursor,
@@ -72,50 +72,52 @@ const idSchema = z.preprocess(
 
 const idArraySchema = z.array(idSchema).min(1);
 
-const orderSchema = z.preprocess(
-    (value) =>
-        value !== null &&
-        value !== undefined &&
-        typeof value === "object" &&
-        !Array.isArray(value) &&
-        Object.keys(value).length === 0
-            ? undefined
-            : value,
-    z
-        .discriminatedUnion("target", [
-            z
-                .object({
-                    target: z.literal("req"),
-                    field: z.enum([
-                        "ext",
-                        "host",
-                        "id",
-                        "method",
-                        "path",
-                        "query",
-                        "created_at",
-                        "source",
-                    ]),
-                    direction: ciEnum(["asc", "desc"]).default("asc"),
-                })
-                .strict(),
-            z
-                .object({
-                    target: z.literal("resp"),
-                    field: z.enum(["length", "roundtrip", "code"]),
-                    direction: ciEnum(["asc", "desc"]).default("asc"),
-                })
-                .strict(),
-        ])
-        .default({ target: "req", field: "id", direction: "asc" }),
-);
+const orderSchema = z
+    .preprocess(
+        (value) =>
+            value !== null &&
+            value !== undefined &&
+            typeof value === "object" &&
+            !Array.isArray(value) &&
+            Object.keys(value).length === 0
+                ? undefined
+                : value,
+        z
+            .discriminatedUnion("target", [
+                z
+                    .object({
+                        target: z.literal("req"),
+                        field: z.enum([
+                            "ext",
+                            "host",
+                            "id",
+                            "method",
+                            "path",
+                            "query",
+                            "created_at",
+                            "source",
+                        ]),
+                        direction: ciEnumDefault(["asc", "desc"], "asc"),
+                    })
+                    .strict(),
+                z
+                    .object({
+                        target: z.literal("resp"),
+                        field: z.enum(["length", "roundtrip", "code"]),
+                        direction: ciEnumDefault(["asc", "desc"], "asc"),
+                    })
+                    .strict(),
+            ])
+            .default({ target: "req", field: "id", direction: "asc" }),
+    )
+    .meta({ default: { target: "req", field: "id", direction: "asc" } });
 
 const listRequestsSchema = z
     .object({
         filter: z.string().min(1).optional(),
         limit: z.number().int().min(1).max(500).default(50),
         cursor: z.string().min(1).optional(),
-        direction: ciEnum(["after", "before"]).default("after"),
+        direction: ciEnumDefault(["after", "before"], "after"),
         order: orderSchema,
         serialization: listHttpSerializationSchema,
         fields: z
@@ -208,7 +210,7 @@ const summarySchema = z
     .object({
         limit: z.number().int().min(1).max(500).default(50),
         cursor: z.string().min(1).optional(),
-        direction: ciEnum(["after", "before"]).default("after"),
+        direction: ciEnumDefault(["after", "before"], "after"),
         order: orderSchema,
         filter: z.string().min(1).optional(),
     })
@@ -303,7 +305,17 @@ const parseSetCookieHeader = (value: string) => {
 
 const summarizeRequests = async (sdk: ToolContext["sdk"], input: z.infer<typeof summarySchema>) => {
     const page = await executeRequestPage(sdk, input);
-    return page.items.map((item) => ({ request: item.request, response: item.response }));
+    return {
+        pageInfo: {
+            hasNextPage: page.pageInfo.hasNextPage,
+            hasPreviousPage: page.pageInfo.hasPreviousPage,
+            startCursor:
+                page.pageInfo.startCursor === undefined ? null : String(page.pageInfo.startCursor),
+            endCursor:
+                page.pageInfo.endCursor === undefined ? null : String(page.pageInfo.endCursor),
+        },
+        pairs: page.items.map((item) => ({ request: item.request, response: item.response })),
+    };
 };
 
 export const registerRequestTools = ({ server, sdk, store, permissions }: ToolContext) => {
@@ -343,7 +355,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         group: ToolGroupId.RequestSafe,
         toolName: "get_requests_by_ids",
         description:
-            "Fetch exact saved HTTP requests by ID with Burp-style lookup envelope and projection. " +
+            "Fetch exact saved HTTP requests by ID with a per-ID result envelope and projection. " +
             'Example: { "ids": [1], "fields": ["request.raw", "response.raw"] }.',
         inputSchema: getRequestsSchema,
         handler: async (params) => {
@@ -562,7 +574,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         inputSchema: summarySchema,
         handler: async (params) => {
             const input = summarySchema.parse(params);
-            const pairs = await summarizeRequests(sdk, input);
+            const { pageInfo, pairs } = await summarizeRequests(sdk, input);
             const byKey = new Map<
                 string,
                 {
@@ -618,6 +630,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
                     {
                         type: "text",
                         text: stringifyResult({
+                            pageInfo,
                             totalEntriesScanned: pairs.length,
                             uniqueCookies: observations.length,
                             observations,
@@ -637,7 +650,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         inputSchema: summarySchema,
         handler: async (params) => {
             const input = summarySchema.parse(params);
-            const pairs = await summarizeRequests(sdk, input);
+            const { pageInfo, pairs } = await summarizeRequests(sdk, input);
             const byHeader = new Map<
                 string,
                 {
@@ -688,6 +701,7 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
                     {
                         type: "text",
                         text: stringifyResult({
+                            pageInfo,
                             totalEntriesScanned: pairs.length,
                             uniqueHeaders: observations.length,
                             observations,

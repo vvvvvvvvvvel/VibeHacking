@@ -55,15 +55,17 @@ const executeAction = async (
             id,
         );
         const result = await promise;
-        if (!result.confirmed) {
-            return {
-                content: [{ type: "text", text: `User rejected action ${payload.action}` }],
-            };
-        }
         if (result.error !== undefined) {
             sdk.console.error(`MCP action failed: ${result.action} id=${id} error=${result.error}`);
             return {
                 content: [{ type: "text", text: `error: ${result.error}` }],
+                isError: true,
+            };
+        }
+        if (!result.confirmed) {
+            return {
+                content: [{ type: "text", text: `User rejected action ${payload.action}` }],
+                isError: true,
             };
         }
         return (

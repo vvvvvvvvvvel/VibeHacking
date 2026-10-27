@@ -1,7 +1,13 @@
 import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
-import type { ToolGroup, ToolGroupMode, ToolGroupTool, ToolPermissions } from "shared";
+import type {
+    ToolGroup,
+    ToolGroupMode,
+    ToolGroupTool,
+    ToolPermissionProfile,
+    ToolPermissions,
+} from "shared";
 
 import { getKvSdk, type KVSDK, type MCPSDK } from "./types/sdk";
 
@@ -19,8 +25,10 @@ export enum ToolGroupId {
     ProxyTrafficControlUnsafe = "proxy-traffic-control-unsafe",
     AutomateSafe = "automate-safe",
     ProjectSafe = "project-safe",
-    ReplaySafe = "replay-safe",
-    ReplayUnsafe = "replay-unsafe",
+    ReplayRead = "replay-read",
+    ReplayPrepare = "replay-prepare",
+    ReplayExecute = "replay-execute",
+    ReplayManage = "replay-manage",
     RequestSafe = "request-safe",
     RequestUnsafe = "request-unsafe",
     RuntimeSafe = "runtime-safe",
@@ -41,52 +49,54 @@ const BASE_GROUPS: ToolGroupSeed[] = [
         tools: [],
         defaultMode: "disabled",
     },
-    { id: ToolGroupId.EnvSafe, label: "Env safe", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.EnvUnsafe, label: "Env unsafe", tools: [], defaultMode: "confirm" },
-    { id: ToolGroupId.FilterSafe, label: "Filter safe", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.FilterUnsafe, label: "Filter unsafe", tools: [], defaultMode: "confirm" },
-    { id: ToolGroupId.FindingSafe, label: "Finding safe", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.FindingUnsafe, label: "Finding unsafe", tools: [], defaultMode: "confirm" },
-    { id: ToolGroupId.HostedFileSafe, label: "HostedFile safe", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.EnvSafe, label: "Environment read", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.EnvUnsafe, label: "Environment manage", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.FilterSafe, label: "Filter read", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.FilterUnsafe, label: "Filter manage", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.FindingSafe, label: "Finding read", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.FindingUnsafe, label: "Finding manage", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.HostedFileSafe, label: "Files read", tools: [], defaultMode: "disabled" },
     {
         id: ToolGroupId.HostedFileUnsafe,
-        label: "HostedFile unsafe",
+        label: "Files manage",
         tools: [],
-        defaultMode: "confirm",
+        defaultMode: "disabled",
     },
     {
         id: ToolGroupId.ProxyTrafficControlSafe,
-        label: "Proxy traffic control safe",
+        label: "Proxy traffic status",
         tools: [],
-        defaultMode: "auto",
+        defaultMode: "disabled",
     },
     {
         id: ToolGroupId.ProxyTrafficControlUnsafe,
-        label: "Proxy traffic control unsafe",
+        label: "Proxy traffic control",
         tools: [],
-        defaultMode: "confirm",
+        defaultMode: "disabled",
     },
-    { id: ToolGroupId.AutomateSafe, label: "Automate", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.ProjectSafe, label: "Project info", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.ReplaySafe, label: "Replay safe", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.ReplayUnsafe, label: "Replay unsafe", tools: [], defaultMode: "confirm" },
-    { id: ToolGroupId.RequestSafe, label: "Request safe", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.RequestUnsafe, label: "Request unsafe", tools: [], defaultMode: "confirm" },
-    { id: ToolGroupId.RuntimeSafe, label: "Runtime info", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.AutomateSafe, label: "Automate", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.ProjectSafe, label: "Project info", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.ReplayRead, label: "Replay read", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.ReplayPrepare, label: "Replay prepare", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.ReplayExecute, label: "Replay execute", tools: [], defaultMode: "confirm" },
+    { id: ToolGroupId.ReplayManage, label: "Replay manage", tools: [], defaultMode: "disabled" },
+    { id: ToolGroupId.RequestSafe, label: "Request inspect", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.RequestUnsafe, label: "Request send", tools: [], defaultMode: "confirm" },
+    { id: ToolGroupId.RuntimeSafe, label: "Runtime info", tools: [], defaultMode: "disabled" },
     { id: ToolGroupId.SitemapSafe, label: "Sitemap", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.ScopeSafe, label: "Scope safe", tools: [], defaultMode: "auto" },
-    { id: ToolGroupId.ScopeUnsafe, label: "Scope unsafe", tools: [], defaultMode: "confirm" },
+    { id: ToolGroupId.ScopeSafe, label: "Scope read", tools: [], defaultMode: "auto" },
+    { id: ToolGroupId.ScopeUnsafe, label: "Scope manage", tools: [], defaultMode: "disabled" },
     {
         id: ToolGroupId.TamperSafe,
-        label: "Tamper (Match & Replace) safe",
+        label: "Tamper read",
         tools: [],
-        defaultMode: "auto",
+        defaultMode: "disabled",
     },
     {
         id: ToolGroupId.TamperUnsafe,
-        label: "Tamper (Match & Replace) unsafe",
+        label: "Tamper manage",
         tools: [],
-        defaultMode: "confirm",
+        defaultMode: "disabled",
     },
     { id: ToolGroupId.WsSafe, label: "WS History", tools: [], defaultMode: "auto" },
 ];
@@ -103,6 +113,44 @@ const createBaseGroups = (): ToolGroup[] =>
 
 const createDefaultStates = (): Record<string, ToolGroupMode> =>
     Object.fromEntries(BASE_GROUPS.map((group) => [group.id, group.defaultMode]));
+
+const fullConfirmGroups = new Set<ToolGroupId>([
+    ToolGroupId.EnvUnsafe,
+    ToolGroupId.FilterUnsafe,
+    ToolGroupId.FindingUnsafe,
+    ToolGroupId.HostedFileUnsafe,
+    ToolGroupId.ProxyTrafficControlUnsafe,
+    ToolGroupId.ReplayExecute,
+    ToolGroupId.ReplayManage,
+    ToolGroupId.RequestUnsafe,
+    ToolGroupId.ScopeUnsafe,
+    ToolGroupId.TamperUnsafe,
+]);
+
+const createProfileStates = (profile: ToolPermissionProfile): Record<string, ToolGroupMode> => {
+    if (profile === "core") return createDefaultStates();
+    return Object.fromEntries(
+        BASE_GROUPS.map((group) => [
+            group.id,
+            group.id === ToolGroupId.LogSafe
+                ? "disabled"
+                : fullConfirmGroups.has(group.id as ToolGroupId)
+                  ? "confirm"
+                  : "auto",
+        ]),
+    );
+};
+
+const sameStates = (left: Record<string, ToolGroupMode>, right: Record<string, ToolGroupMode>) =>
+    BASE_GROUPS.every((group) => left[group.id] === right[group.id]);
+
+const resolveProfile = (
+    states: Record<string, ToolGroupMode>,
+): ToolPermissionProfile | "custom" => {
+    if (sameStates(states, createProfileStates("core"))) return "core";
+    if (sameStates(states, createProfileStates("full"))) return "full";
+    return "custom";
+};
 
 const groupIds = new Set<string>(BASE_GROUPS.map((group) => group.id));
 
@@ -199,6 +247,7 @@ export class ToolPermissionsStore {
                 tools: group.tools.map((tool) => ({ ...tool })),
             })),
             states: { ...this.states },
+            profile: resolveProfile(this.states),
         };
     }
 
@@ -251,6 +300,23 @@ export class ToolPermissionsStore {
             }
             const previous = this.states;
             this.states = nextStates;
+            try {
+                await this.save();
+            } catch (error) {
+                this.states = previous;
+                throw error;
+            }
+            return this.getPermissions();
+        });
+    }
+
+    applyProfile(profile: ToolPermissionProfile): Promise<ToolPermissions> {
+        return this.enqueueMutation(async () => {
+            if (profile !== "core" && profile !== "full") {
+                throw new Error(`Invalid tool permission profile: ${String(profile)}`);
+            }
+            const previous = this.states;
+            this.states = createProfileStates(profile);
             try {
                 await this.save();
             } catch (error) {

@@ -61,6 +61,7 @@ export const HTTP_HISTORY_FIELD_PATHS = new Set([
     "match_context.excerpts",
     "match_context.excerpts.path",
     "match_context.excerpts.text",
+    "match_context.truncated",
 ]);
 
 export const WS_MESSAGE_FIELD_PATHS = new Set([
