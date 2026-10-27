@@ -3,6 +3,7 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import type { ZodType } from "zod";
 
 import type { ConfirmActionStore } from "../confirm-actions";
+import type { GraphqlExecutor } from "../graphql";
 import type { ToolGroupId, ToolPermissionsStore } from "../tool-permissions";
 import type { MCPSDK } from "../types/sdk";
 
@@ -12,6 +13,7 @@ import { formatDetails, isToolResult } from "./shared";
 export type ToolContext = {
     server: McpServer;
     sdk: MCPSDK;
+    graphql: GraphqlExecutor;
     store: ConfirmActionStore;
     permissions: ToolPermissionsStore;
 };

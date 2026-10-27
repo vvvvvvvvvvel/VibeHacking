@@ -14,7 +14,7 @@ import { ToolGroupId } from "../tool-permissions";
 import { registerToolAction, type ToolContext } from "./register";
 import { stringifyResult } from "./shared";
 
-export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerEnvTools = ({ server, sdk, graphql, store, permissions }: ToolContext) => {
     const idSchema = z.preprocess(
         (value) => (typeof value === "number" ? String(value) : value),
         z.string().min(1),
@@ -125,7 +125,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         description: "List all environments with variables.",
         inputSchema: envVarsSchema,
         handler: async () => {
-            const response = await sdk.graphql.execute(LIST_ENVIRONMENTS_QUERY);
+            const response = await graphql.execute(LIST_ENVIRONMENTS_QUERY);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -139,7 +139,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         description: "Get an environment record by ID.",
         inputSchema: envIdSchema,
         handler: async (params) => {
-            const response = await sdk.graphql.execute(GET_ENVIRONMENT_QUERY, params);
+            const response = await graphql.execute(GET_ENVIRONMENT_QUERY, params);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -153,7 +153,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         description: "Get environment context (selected + global).",
         inputSchema: envVarsSchema,
         handler: async () => {
-            const response = await sdk.graphql.execute(GET_ENVIRONMENT_CONTEXT_QUERY);
+            const response = await graphql.execute(GET_ENVIRONMENT_CONTEXT_QUERY);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -173,7 +173,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
                 name: string;
                 variables?: Array<{ name: string; value: string; kind?: "PLAIN" | "SECRET" }>;
             };
-            const response = await sdk.graphql.execute(CREATE_ENVIRONMENT_MUTATION, {
+            const response = await graphql.execute(CREATE_ENVIRONMENT_MUTATION, {
                 input: {
                     name: input.name,
                     variables:
@@ -208,7 +208,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
             let name = input.name;
             let version = input.version;
             if (name === undefined || version === undefined) {
-                const current = await sdk.graphql.execute<{
+                const current = await graphql.execute<{
                     environment?: { name?: string; version?: number };
                 }>(GET_ENVIRONMENT_QUERY, { id: input.id });
                 const env = current.data?.environment;
@@ -225,7 +225,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
                     ],
                 };
             }
-            const response = await sdk.graphql.execute(UPDATE_ENVIRONMENT_MUTATION, {
+            const response = await graphql.execute(UPDATE_ENVIRONMENT_MUTATION, {
                 id: input.id,
                 input: {
                     name,
@@ -250,7 +250,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         description: "Delete an environment by ID.",
         inputSchema: envIdSchema,
         handler: async (params) => {
-            const response = await sdk.graphql.execute(DELETE_ENVIRONMENT_MUTATION, params);
+            const response = await graphql.execute(DELETE_ENVIRONMENT_MUTATION, params);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -265,7 +265,7 @@ export const registerEnvTools = ({ server, sdk, store, permissions }: ToolContex
         inputSchema: envSelectSchema,
         handler: async (params) => {
             const input = params as { id?: string };
-            const response = await sdk.graphql.execute(SELECT_ENVIRONMENT_MUTATION, {
+            const response = await graphql.execute(SELECT_ENVIRONMENT_MUTATION, {
                 id: input.id ?? null,
             });
             return {

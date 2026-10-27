@@ -603,7 +603,7 @@ const serializeSitemapEntryRequestConnection = async ({
     };
 };
 
-export const registerSitemapTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerSitemapTools = ({ server, sdk, graphql, store, permissions }: ToolContext) => {
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.sitemap.listRoots",
         group: ToolGroupId.SitemapSafe,
@@ -616,7 +616,7 @@ export const registerSitemapTools = ({ server, sdk, store, permissions }: ToolCo
             const input = listSitemapRootsSchema.parse(params);
             const projection = resolveEntryProjection(input);
             const includeRequestItems = shouldIncludeEntryRequestItems(input);
-            const response = await sdk.graphql.execute<SitemapRootEntriesResponse>(
+            const response = await graphql.execute<SitemapRootEntriesResponse>(
                 LIST_SITEMAP_ROOTS_QUERY,
                 {
                     scopeId: input.scope_id ?? undefined,
@@ -655,7 +655,7 @@ export const registerSitemapTools = ({ server, sdk, store, permissions }: ToolCo
             const input = listSitemapDescendantsSchema.parse(params);
             const projection = resolveEntryProjection(input);
             const includeRequestItems = shouldIncludeEntryRequestItems(input);
-            const response = await sdk.graphql.execute<SitemapDescendantEntriesResponse>(
+            const response = await graphql.execute<SitemapDescendantEntriesResponse>(
                 LIST_SITEMAP_DESCENDANTS_QUERY,
                 {
                     parentId: input.parent_id,
@@ -697,7 +697,7 @@ export const registerSitemapTools = ({ server, sdk, store, permissions }: ToolCo
             const includeRequestItems = shouldIncludeEntryRequestItems(input);
             const results = [];
             for (const id of input.ids) {
-                const response = await sdk.graphql.execute<SitemapEntryResponse>(
+                const response = await graphql.execute<SitemapEntryResponse>(
                     GET_SITEMAP_ENTRY_QUERY,
                     {
                         id,
@@ -733,7 +733,7 @@ export const registerSitemapTools = ({ server, sdk, store, permissions }: ToolCo
         handler: async (params) => {
             const input = listSitemapEntryRequestsSchema.parse(params);
             const projection = resolveRequestProjection(input);
-            const response = await sdk.graphql.execute<SitemapEntryRequestsResponse>(
+            const response = await graphql.execute<SitemapEntryRequestsResponse>(
                 LIST_SITEMAP_ENTRY_REQUESTS_QUERY,
                 {
                     id: input.entry_id,

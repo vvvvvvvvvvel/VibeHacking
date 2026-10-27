@@ -1,4 +1,9 @@
-import { MCP_CONTROL_ENDPOINT_PATH, MCP_ENDPOINT_PATH, type McpSettings } from "shared";
+import {
+    MCP_CONTROL_ENDPOINT_PATH,
+    MCP_ENDPOINT_PATH,
+    type McpServerState,
+    type McpSettings,
+} from "shared";
 
 import { ConfirmActionStore } from "./confirm-actions";
 import { createMcpControlHandler } from "./mcp-control";
@@ -17,6 +22,8 @@ type McpServerOptions = {
 
 export class McpHttpServer {
     private initPromise: Promise<void> | undefined;
+    private initialized = false;
+    private settingsMutationQueue: Promise<void> = Promise.resolve();
     private readonly settingsStore: McpSettingsStore;
     private readonly runtime: McpRuntime;
     private readonly listeners: McpListenerManager;
@@ -55,7 +62,9 @@ export class McpHttpServer {
             onBeforeMcpListenerStop: async () => await this.runtime.stop(),
             onUnexpectedMcpStop: () => {
                 this.settingsStore.setMcpServerEnabled(false);
-                void this.settingsStore.save();
+                void this.settingsStore.save().catch((error: unknown) => {
+                    this.sdk.console.error(`Failed to persist stopped MCP state: ${error}`);
+                });
                 this.emitSettingsChanged();
             },
         });
@@ -68,7 +77,7 @@ export class McpHttpServer {
     }
 
     async initializeMcpServer(): Promise<void> {
-        if (!this.initPromise) {
+        if (!this.initialized && !this.initPromise) {
             this.initPromise = (async () => {
                 const snapshot = await this.settingsStore.load();
                 if (snapshot !== undefined) {
@@ -77,6 +86,9 @@ export class McpHttpServer {
                 await this.permissionsStore.load();
                 this.runtime.initializeTools();
                 await this.start();
+                this.initialized = true;
+                this.emitSettingsChanged();
+                this.emitToolPermissionsChanged();
             })().catch(async (error) => {
                 this.settingsStore.setMcpServerEnabled(false);
                 await this.settingsStore.save();
@@ -84,7 +96,16 @@ export class McpHttpServer {
                 throw error;
             });
         }
-        await this.initPromise;
+        if (!this.initialized) {
+            await this.initPromise;
+        }
+    }
+
+    getMcpServerState(): McpServerState {
+        return {
+            settings: this.getMcpServerSettings(),
+            toolPermissions: this.getToolGroupPermissionModes(),
+        };
     }
 
     getMcpServerSettings(): McpSettings {
@@ -112,55 +133,66 @@ export class McpHttpServer {
         return next;
     }
 
-    async setMcpServerEnabled(enabled: boolean): Promise<McpSettings> {
-        if (this.settingsStore.enabled === enabled) {
-            await this.start();
-            return this.getMcpServerSettings();
-        }
-        const previous = this.settingsStore.getSnapshot();
-        this.settingsStore.setMcpServerEnabled(enabled);
+    setMcpServerEnabled(enabled: boolean): Promise<McpSettings> {
+        return this.enqueueSettingsMutation(async () => {
+            if (this.settingsStore.enabled === enabled) {
+                await this.start();
+                return this.getMcpServerSettings();
+            }
+            const previous = this.settingsStore.getSnapshot();
+            this.settingsStore.setMcpServerEnabled(enabled);
 
-        try {
-            await this.start();
-        } catch (err) {
-            this.settingsStore.applySnapshot(previous);
-            throw err;
-        }
-
-        await this.settingsStore.save();
-        const settings = this.getMcpServerSettings();
-        this.emitSettingsChanged(settings);
-        return settings;
-    }
-
-    async updateMcpServerConfig(config: { host: string; port: number }): Promise<McpSettings> {
-        const previous = this.settingsStore.getSnapshot();
-        this.settingsStore.updateMcpServerConfig(config);
-        const next = this.settingsStore.getSnapshot();
-        const changed = next.host !== previous.host || next.port !== previous.port;
-
-        if (changed) {
             try {
                 await this.start();
+                await this.settingsStore.save();
             } catch (err) {
                 this.settingsStore.applySnapshot(previous);
                 try {
                     await this.start();
                 } catch {
-                    // Ignore restart errors and rethrow original.
-                }
-                const message = err instanceof Error ? err.message : String(err);
-                if (message.includes("Address already in use")) {
-                    throw new Error(`Port ${next.port} is already in use.`);
+                    // Preserve the original operation error.
                 }
                 throw err;
             }
-        }
 
-        await this.settingsStore.save();
-        const settings = this.getMcpServerSettings();
-        this.emitSettingsChanged(settings);
-        return settings;
+            const settings = this.getMcpServerSettings();
+            this.emitSettingsChanged(settings);
+            return settings;
+        });
+    }
+
+    updateMcpServerConfig(config: { host: string; port: number }): Promise<McpSettings> {
+        return this.enqueueSettingsMutation(async () => {
+            const previous = this.settingsStore.getSnapshot();
+            this.settingsStore.updateMcpServerConfig(config);
+            const next = this.settingsStore.getSnapshot();
+            const changed = next.host !== previous.host || next.port !== previous.port;
+
+            if (changed) {
+                try {
+                    await this.start();
+                    await this.settingsStore.save();
+                } catch (err) {
+                    this.settingsStore.applySnapshot(previous);
+                    try {
+                        await this.start();
+                    } catch {
+                        // Ignore restart errors and rethrow original.
+                    }
+                    const message = err instanceof Error ? err.message : String(err);
+                    if (message.includes("Address already in use")) {
+                        throw new Error(`Port ${next.port} is already in use.`);
+                    }
+                    throw err;
+                }
+            } else {
+                await this.settingsStore.save();
+            }
+
+            const settings = this.getMcpServerSettings();
+            this.emitSettingsChanged(settings);
+            return settings;
+        });
     }
 
     async start() {
@@ -181,5 +213,14 @@ export class McpHttpServer {
 
     private emitToolPermissionsChanged(permissions = this.getToolGroupPermissionModes()) {
         this.sdk.api.send("vibe-hacking:tool-group-permission-modes-changed", permissions);
+    }
+
+    private enqueueSettingsMutation<T>(operation: () => Promise<T>): Promise<T> {
+        const result = this.settingsMutationQueue.then(operation);
+        this.settingsMutationQueue = result.then(
+            () => undefined,
+            () => undefined,
+        );
+        return result;
     }
 }

@@ -1,6 +1,6 @@
 {
     "name": "backend",
-    "version": "3.0.1",
+    "version": "4.0.0",
     "description": "MCP backend",
     "type": "module",
     "types": "src/index.ts",
@@ -8,9 +8,9 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.30.0",
+        "@modelcontextprotocol/sdk": "^1.32.2",
         "shared": "workspace:*",
-        "zod": "^4.5.4"
+        "zod": "^4.6.7"
     },
     "devDependencies": {
         "@caido/quickjs-types": "^0.26.0",

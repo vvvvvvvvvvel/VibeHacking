@@ -12,6 +12,8 @@ import type { HandlerResult, HttpHandler } from "./server";
 import type { ToolPermissionsStore } from "./tool-permissions";
 import type { MCPSDK } from "./types/sdk";
 
+const MCP_MAX_REQUEST_BODY_SIZE = 4 * 1024 * 1024;
+
 export class McpRuntime {
     private readonly sdk: MCPSDK;
     private readonly confirmStore: ConfirmActionStore;
@@ -113,7 +115,21 @@ export class McpRuntime {
         transport: WebStandardStreamableHTTPServerTransport,
         req: CaidoRequest,
     ): Promise<CaidoResponse> {
-        return (await transport.handleRequest(req as unknown as Request)) as CaidoResponse;
+        let parsedBody: unknown;
+        if (req.method === "POST") {
+            const contentLength = Number(req.headers.get("content-length") ?? 0);
+            if (contentLength <= MCP_MAX_REQUEST_BODY_SIZE) {
+                try {
+                    // caido:http bodies are not Web ReadableStreams. Supplying parsedBody lets the
+                    // MCP transport retain its protocol validation without reading body.getReader().
+                    parsedBody = await req.clone().json();
+                } catch {
+                    // Let the transport produce its standard JSON-RPC parse error response.
+                }
+            }
+        }
+        const options = parsedBody === undefined ? undefined : { parsedBody };
+        return (await transport.handleRequest(req as unknown as Request, options)) as CaidoResponse;
     }
 
     private ensureGlobals() {
@@ -140,7 +156,8 @@ export class McpRuntime {
         }
         if (g.TextDecoder === undefined) {
             class SimpleTextDecoder {
-                decode(input: Uint8Array): string {
+                decode(input?: Uint8Array): string {
+                    if (input === undefined) return "";
                     return Buffer.from(input).toString("utf8");
                 }
             }

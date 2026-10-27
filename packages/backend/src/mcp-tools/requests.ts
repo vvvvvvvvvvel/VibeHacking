@@ -1,5 +1,3 @@
-import { Buffer } from "buffer";
-
 import { RequestSpecRaw } from "caido:utils";
 import type { RequestOrderField, RequestsQuery, ResponseOrderField } from "caido:utils";
 import { z } from "zod";
@@ -26,6 +24,11 @@ import type {
 import { ToolGroupId } from "../tool-permissions";
 
 import { httpSerializationSchema, listHttpSerializationSchema } from "./http-serialization-schema";
+import {
+    decodeRawHttpRequest,
+    rawHttpRequestConnection,
+    rawHttpRequestSchema,
+} from "./raw-request";
 import { registerToolAction, type ToolContext } from "./register";
 import {
     ciEnum,
@@ -178,18 +181,9 @@ const sendRequestsSchema = z
     })
     .strict();
 
-const sendRawRequestItemSchema = z
-    .object({
-        raw_base64: z.string().min(1),
-        host: z.string().min(1),
-        port: z.number().int().min(1).max(65535),
-        is_tls: z.boolean().optional(),
-    })
-    .strict();
-
 const sendRawRequestsSchema = z
     .object({
-        items: z.array(sendRawRequestItemSchema).min(1),
+        items: z.array(rawHttpRequestSchema).min(1),
         options: sendRequestOptionsSchema.nullable().optional(),
         serialization: httpSerializationSchema,
     })
@@ -483,9 +477,10 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
         toolName: "send_raw_requests",
         description:
             "Send crafted raw HTTP requests directly to a target, without first saving them. " +
-            "raw_base64 is the base64-encoded raw HTTP request; host/port/is_tls set the connection. " +
+            "Provide exactly one of raw_text (UTF-8 HTTP) or raw_base64 (binary-safe HTTP) per item; " +
+            "host/port/is_tls set the connection. " +
             "Returns the live response. The request is not added to Proxy history unless options.save is true. " +
-            'Example: { "items": [{ "raw_base64": "<base64>", "host": "example.com", "port": 443, "is_tls": true }], "options": { "save": true } }.',
+            'Example: { "items": [{ "raw_text": "GET / HTTP/1.1\\r\\nHost: example.com\\r\\n\\r\\n", "host": "example.com", "port": 443, "is_tls": true }], "options": { "save": true } }.',
         inputSchema: sendRawRequestsSchema,
         handler: async (params) => {
             const input = sendRawRequestsSchema.parse(params);
@@ -500,13 +495,13 @@ export const registerRequestTools = ({ server, sdk, store, permissions }: ToolCo
             const results = [];
             for (const [index, item] of input.items.entries()) {
                 try {
-                    const isTls = item.is_tls ?? item.port === 443;
+                    const { host, port, isTls } = rawHttpRequestConnection(item);
                     const scheme = isTls ? "https" : "http";
-                    const spec = new RequestSpecRaw(`${scheme}://${item.host}:${item.port}`);
-                    spec.setHost(item.host);
-                    spec.setPort(item.port);
+                    const spec = new RequestSpecRaw(`${scheme}://${host}:${port}`);
+                    spec.setHost(host);
+                    spec.setPort(port);
                     spec.setTls(isTls);
-                    spec.setRaw(Buffer.from(item.raw_base64, "base64"));
+                    spec.setRaw(decodeRawHttpRequest(item));
                     const sent = await sdk.requests.send(spec, input.options ?? {});
                     results.push({
                         ok: true,

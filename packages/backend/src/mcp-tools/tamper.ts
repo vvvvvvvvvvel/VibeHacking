@@ -220,7 +220,7 @@ const buildSimpleSection = (input: {
     return section;
 };
 
-export const registerTamperTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerTamperTools = ({ server, sdk, graphql, store, permissions }: ToolContext) => {
     const idSchema = z.preprocess(
         (value) => (typeof value === "number" ? String(value) : value),
         z.string().min(1),
@@ -307,7 +307,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         description: "List Tamper rule collections with their rules.",
         inputSchema: emptySchema,
         handler: async () => {
-            const response = await sdk.graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
+            const response = await graphql.execute(LIST_TAMPER_RULE_COLLECTIONS_QUERY);
             return {
                 content: [
                     {
@@ -331,7 +331,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { ids } = getCollectionSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(GET_TAMPER_RULE_COLLECTION_QUERY, {
+                    const response = await graphql.execute(GET_TAMPER_RULE_COLLECTION_QUERY, {
                         id,
                     });
                     return { id, result: normalizeTamperResult(extractGraphqlResult(response)) };
@@ -353,7 +353,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { ids } = getRuleSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(GET_TAMPER_RULE_QUERY, { id });
+                    const response = await graphql.execute(GET_TAMPER_RULE_QUERY, { id });
                     return { id, result: normalizeTamperResult(extractGraphqlResult(response)) };
                 }),
             );
@@ -373,10 +373,9 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { items } = createCollectionSchema.parse(params);
             const results = await Promise.all(
                 items.map(async (name) => {
-                    const response = await sdk.graphql.execute(
-                        CREATE_TAMPER_RULE_COLLECTION_MUTATION,
-                        { input: { name } },
-                    );
+                    const response = await graphql.execute(CREATE_TAMPER_RULE_COLLECTION_MUTATION, {
+                        input: { name },
+                    });
                     return { name, result: extractGraphqlResult(response) };
                 }),
             );
@@ -396,7 +395,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { items } = renameCollectionSchema.parse(params);
             const results = await Promise.all(
                 items.map(async (item) => {
-                    const response = await sdk.graphql.execute(
+                    const response = await graphql.execute(
                         RENAME_TAMPER_RULE_COLLECTION_MUTATION,
                         item,
                     );
@@ -419,10 +418,9 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { ids } = deleteCollectionSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(
-                        DELETE_TAMPER_RULE_COLLECTION_MUTATION,
-                        { id },
-                    );
+                    const response = await graphql.execute(DELETE_TAMPER_RULE_COLLECTION_MUTATION, {
+                        id,
+                    });
                     return { id, result: extractGraphqlResult(response) };
                 }),
             );
@@ -459,7 +457,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                         condition: toGraphqlConditionInput(item.condition),
                         sources: item.sources,
                     };
-                    const response = await sdk.graphql.execute(CREATE_TAMPER_RULE_MUTATION, {
+                    const response = await graphql.execute(CREATE_TAMPER_RULE_MUTATION, {
                         input,
                     });
                     return {
@@ -498,7 +496,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                         condition: toGraphqlConditionInput(item.condition),
                         sources: item.sources,
                     };
-                    const response = await sdk.graphql.execute(UPDATE_TAMPER_RULE_MUTATION, {
+                    const response = await graphql.execute(UPDATE_TAMPER_RULE_MUTATION, {
                         id: item.id,
                         input,
                     });
@@ -524,7 +522,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { items } = renameRuleSchema.parse(params);
             const results = await Promise.all(
                 items.map(async (item) => {
-                    const response = await sdk.graphql.execute(RENAME_TAMPER_RULE_MUTATION, item);
+                    const response = await graphql.execute(RENAME_TAMPER_RULE_MUTATION, item);
                     return { id: item.id, result: extractGraphqlResult(response) };
                 }),
             );
@@ -544,7 +542,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { rule_ids } = deleteRuleSchema.parse(params);
             const results = await Promise.all(
                 rule_ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(DELETE_TAMPER_RULE_MUTATION, { id });
+                    const response = await graphql.execute(DELETE_TAMPER_RULE_MUTATION, { id });
                     return { id, result: extractGraphqlResult(response) };
                 }),
             );
@@ -564,7 +562,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { rule_ids, enabled } = toggleRuleSchema.parse(params);
             const results = await Promise.all(
                 rule_ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(TOGGLE_TAMPER_RULE_MUTATION, {
+                    const response = await graphql.execute(TOGGLE_TAMPER_RULE_MUTATION, {
                         id,
                         enabled,
                     });
@@ -587,7 +585,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
             const { rule_ids, collection_id } = moveRuleSchema.parse(params);
             const results = await Promise.all(
                 rule_ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(MOVE_TAMPER_RULE_MUTATION, {
+                    const response = await graphql.execute(MOVE_TAMPER_RULE_MUTATION, {
                         id,
                         collectionId: collection_id,
                     });
@@ -624,7 +622,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                 id: string;
                 input: { before_id?: string; after_id?: string };
             };
-            const response = await sdk.graphql.execute(RANK_TAMPER_RULE_MUTATION, {
+            const response = await graphql.execute(RANK_TAMPER_RULE_MUTATION, {
                 id: parsed.id,
                 input: {
                     beforeId: parsed.input.before_id,
@@ -649,7 +647,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
         handler: async (params) => {
             const parsed = testTamperRuleSimpleSchema.parse(params);
             const section = buildSimpleSection(parsed);
-            const response = await sdk.graphql.execute(TEST_TAMPER_RULE_MUTATION, {
+            const response = await graphql.execute(TEST_TAMPER_RULE_MUTATION, {
                 input: { raw: parsed.raw_base64, section },
             });
             return {
@@ -682,7 +680,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                 ? { collections: collectionsInput, rules: rulesInput }
                 : undefined;
             if (target === undefined) {
-                const collectionsResponse = await sdk.graphql.execute(
+                const collectionsResponse = await graphql.execute(
                     LIST_TAMPER_RULE_COLLECTIONS_QUERY,
                 );
                 const collections = normalizeTamperResult(
@@ -694,7 +692,7 @@ export const registerTamperTools = ({ server, sdk, store, permissions }: ToolCon
                         .filter((id) => id !== undefined && id !== null),
                 };
             }
-            const response = await sdk.graphql.execute(EXPORT_TAMPER_MUTATION, {
+            const response = await graphql.execute(EXPORT_TAMPER_MUTATION, {
                 input: { target },
             });
             return {

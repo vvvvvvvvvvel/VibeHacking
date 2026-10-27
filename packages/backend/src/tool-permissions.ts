@@ -1,9 +1,9 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
 import type { ToolGroup, ToolGroupMode, ToolGroupTool, ToolPermissions } from "shared";
 
-import type { MCPSDK } from "./types/sdk";
+import { getKvSdk, type KVSDK, type MCPSDK } from "./types/sdk";
 
 export enum ToolGroupId {
     LogSafe = "group-log",
@@ -15,8 +15,9 @@ export enum ToolGroupId {
     FindingUnsafe = "finding-unsafe",
     HostedFileSafe = "hosted-file-safe",
     HostedFileUnsafe = "hosted-file-unsafe",
-    ProxyPassthroughSafe = "proxy-passthrough-safe",
-    ProxyPassthroughUnsafe = "proxy-passthrough-unsafe",
+    ProxyTrafficControlSafe = "proxy-traffic-control-safe",
+    ProxyTrafficControlUnsafe = "proxy-traffic-control-unsafe",
+    AutomateSafe = "automate-safe",
     ProjectSafe = "project-safe",
     ReplaySafe = "replay-safe",
     ReplayUnsafe = "replay-unsafe",
@@ -54,17 +55,18 @@ const BASE_GROUPS: ToolGroupSeed[] = [
         defaultMode: "confirm",
     },
     {
-        id: ToolGroupId.ProxyPassthroughSafe,
-        label: "Proxy passthrough safe",
+        id: ToolGroupId.ProxyTrafficControlSafe,
+        label: "Proxy traffic control safe",
         tools: [],
         defaultMode: "auto",
     },
     {
-        id: ToolGroupId.ProxyPassthroughUnsafe,
-        label: "Proxy passthrough unsafe",
+        id: ToolGroupId.ProxyTrafficControlUnsafe,
+        label: "Proxy traffic control unsafe",
         tools: [],
         defaultMode: "confirm",
     },
+    { id: ToolGroupId.AutomateSafe, label: "Automate", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.ProjectSafe, label: "Project info", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.ReplaySafe, label: "Replay safe", tools: [], defaultMode: "auto" },
     { id: ToolGroupId.ReplayUnsafe, label: "Replay unsafe", tools: [], defaultMode: "confirm" },
@@ -90,7 +92,7 @@ const BASE_GROUPS: ToolGroupSeed[] = [
 ];
 
 const DEFAULT_MODE: ToolGroupMode = "confirm";
-const HIDDEN_GROUP_IDS = new Set<string>([]);
+const TOOL_PERMISSIONS_KEY = "mcp-tool-permissions";
 
 const createBaseGroups = (): ToolGroup[] =>
     BASE_GROUPS.map(({ id, label, tools }) => ({
@@ -103,9 +105,6 @@ const createDefaultStates = (): Record<string, ToolGroupMode> =>
     Object.fromEntries(BASE_GROUPS.map((group) => [group.id, group.defaultMode]));
 
 const groupIds = new Set<string>(BASE_GROUPS.map((group) => group.id));
-const visibleGroupIds = new Set<string>(
-    BASE_GROUPS.filter((group) => !HIDDEN_GROUP_IDS.has(group.id)).map((group) => group.id),
-);
 
 const LEGACY_GROUP_ID_MIGRATIONS: Record<string, ToolGroupId> = {
     "temper-safe": ToolGroupId.TamperSafe,
@@ -123,10 +122,12 @@ const mergeKnownStates = (
 ): { states: Record<string, ToolGroupMode>; migrated: boolean } => {
     const next = createDefaultStates();
     if (states === null || typeof states !== "object" || Array.isArray(states)) {
-        return { states: next, migrated: false };
+        return { states: next, migrated: true };
     }
     const input = states as Record<string, unknown>;
-    let migrated = false;
+    let migrated = Object.entries(input).some(
+        ([groupId, mode]) => !groupIds.has(groupId) || !isToolGroupMode(mode),
+    );
     for (const [groupId, mode] of Object.entries(input)) {
         if (groupIds.has(groupId) && isToolGroupMode(mode)) {
             next[groupId] = mode;
@@ -146,42 +147,58 @@ const mergeKnownStates = (
 
 export class ToolPermissionsStore {
     private readonly sdk: MCPSDK;
+    private readonly kv: KVSDK;
     private readonly permissionsPath: string;
+    private keyDefined = false;
     private persistQueue: Promise<void> = Promise.resolve();
+    private mutationQueue: Promise<void> = Promise.resolve();
     private groups: ToolGroup[] = createBaseGroups();
     private states: Record<string, ToolGroupMode> = createDefaultStates();
     private actionToGroup: Record<string, ToolGroupId> = {};
 
     constructor(sdk: MCPSDK) {
         this.sdk = sdk;
+        this.kv = getKvSdk(sdk);
         this.permissionsPath = join(this.sdk.meta.path(), "tool-permissions.json");
     }
 
     async load(): Promise<void> {
+        await this.defineKey();
         try {
-            const raw = await readFile(this.permissionsPath, { encoding: "utf8" });
-            const parsed = JSON.parse(String(raw)) as ToolPermissions;
-            this.groups = createBaseGroups();
-            const merged = mergeKnownStates(parsed?.states);
-            this.states = merged.states;
-            if (merged.migrated) {
-                await this.save();
+            const stored = await this.kv.get(TOOL_PERMISSIONS_KEY);
+            if (stored !== null && stored !== undefined) {
+                const migrated = this.applyStoredPermissions(stored);
+                if (migrated) await this.save();
+                await this.clearLegacyFile();
+                return;
             }
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            if (!message.includes("no such file") && !message.includes("ENOENT")) {
-                this.sdk.console.error(`Failed to read tool permissions: ${message}`);
+            this.sdk.console.error(`Failed to read tool permissions from KV: ${this.message(err)}`);
+            throw err;
+        }
+
+        try {
+            const raw = await readFile(this.permissionsPath, { encoding: "utf8" });
+            this.applyStoredPermissions(JSON.parse(String(raw)) as unknown);
+            await this.save();
+            await this.clearLegacyFile();
+        } catch (err) {
+            const message = this.message(err);
+            if (!this.isMissingFileError(message)) {
+                this.sdk.console.error(`Failed to migrate legacy tool permissions: ${message}`);
             }
             await this.save();
+            await this.clearLegacyFile();
         }
     }
 
     getPermissions(): ToolPermissions {
         return {
-            groups: this.groups.filter((group) => !HIDDEN_GROUP_IDS.has(group.id)),
-            states: Object.fromEntries(
-                Object.entries(this.states).filter(([groupId]) => visibleGroupIds.has(groupId)),
-            ),
+            groups: this.groups.map((group) => ({
+                ...group,
+                tools: group.tools.map((tool) => ({ ...tool })),
+            })),
+            states: { ...this.states },
         };
     }
 
@@ -189,7 +206,6 @@ export class ToolPermissionsStore {
         const groupId = this.actionToGroup[action];
         const group = this.groups.find((g) => g.id === groupId);
         if (!group) return DEFAULT_MODE;
-        if (HIDDEN_GROUP_IDS.has(group.id)) return "auto";
         return this.states[group.id] ?? DEFAULT_MODE;
     }
 
@@ -204,44 +220,102 @@ export class ToolPermissionsStore {
             : [...group.tools, nextTool];
     }
 
-    async setGroupMode(groupId: string, mode: ToolGroupMode): Promise<ToolPermissions> {
-        if (!visibleGroupIds.has(groupId)) {
-            throw new Error(`Unknown tool group: ${groupId}`);
-        }
-        if (!isToolGroupMode(mode)) {
-            throw new Error(`Invalid tool group mode: ${String(mode)}`);
-        }
-        this.states = { ...this.states, [groupId]: mode };
-        await this.save();
-        return this.getPermissions();
+    setGroupMode(groupId: string, mode: ToolGroupMode): Promise<ToolPermissions> {
+        return this.enqueueMutation(async () => {
+            if (!groupIds.has(groupId)) {
+                throw new Error(`Unknown tool group: ${groupId}`);
+            }
+            if (!isToolGroupMode(mode)) {
+                throw new Error(`Invalid tool group mode: ${String(mode)}`);
+            }
+            const previous = this.states;
+            this.states = { ...this.states, [groupId]: mode };
+            try {
+                await this.save();
+            } catch (error) {
+                this.states = previous;
+                throw error;
+            }
+            return this.getPermissions();
+        });
     }
 
-    async setAllGroupModes(mode: ToolGroupMode): Promise<ToolPermissions> {
-        if (!isToolGroupMode(mode)) {
-            throw new Error(`Invalid tool group mode: ${String(mode)}`);
-        }
-        const nextStates = { ...this.states };
-        for (const group of this.groups) {
-            nextStates[group.id] = HIDDEN_GROUP_IDS.has(group.id) ? "auto" : mode;
-        }
-        this.states = nextStates;
-        await this.save();
-        return this.getPermissions();
+    setAllGroupModes(mode: ToolGroupMode): Promise<ToolPermissions> {
+        return this.enqueueMutation(async () => {
+            if (!isToolGroupMode(mode)) {
+                throw new Error(`Invalid tool group mode: ${String(mode)}`);
+            }
+            const nextStates = { ...this.states };
+            for (const group of this.groups) {
+                nextStates[group.id] = mode;
+            }
+            const previous = this.states;
+            this.states = nextStates;
+            try {
+                await this.save();
+            } catch (error) {
+                this.states = previous;
+                throw error;
+            }
+            return this.getPermissions();
+        });
     }
 
     private save(): Promise<void> {
-        this.persistQueue = this.persistQueue
-            .then(() => this.saveInternal())
-            .catch(() => undefined);
-        return this.persistQueue;
+        const operation = this.persistQueue.then(() => this.saveInternal());
+        this.persistQueue = operation.catch(() => undefined);
+        return operation;
     }
 
     private async saveInternal(): Promise<void> {
-        await mkdir(this.sdk.meta.path(), { recursive: true });
-        const data: ToolPermissions = {
-            groups: this.groups,
-            states: this.states,
-        };
-        await writeFile(this.permissionsPath, JSON.stringify(data, null, 2));
+        await this.defineKey();
+        await this.kv.set(TOOL_PERMISSIONS_KEY, { states: this.states });
+    }
+
+    private async defineKey() {
+        if (this.keyDefined) return;
+        await this.kv.define(TOOL_PERMISSIONS_KEY, { exportable: true });
+        this.keyDefined = true;
+    }
+
+    private applyStoredPermissions(value: unknown) {
+        const parsed =
+            value !== null && typeof value === "object" && !Array.isArray(value)
+                ? (value as { states?: unknown })
+                : {};
+        this.groups = createBaseGroups();
+        const merged = mergeKnownStates(parsed.states);
+        this.states = merged.states;
+        return merged.migrated;
+    }
+
+    private async clearLegacyFile() {
+        try {
+            await readFile(this.permissionsPath);
+            await writeFile(this.permissionsPath, "{}\n");
+        } catch (err) {
+            const message = this.message(err);
+            if (!this.isMissingFileError(message)) {
+                this.sdk.console.error(`Failed to clear legacy tool permissions: ${message}`);
+            }
+        }
+    }
+
+    private message(error: unknown) {
+        return error instanceof Error ? error.message : String(error);
+    }
+
+    private isMissingFileError(message: string) {
+        const normalized = message.toLowerCase();
+        return normalized.includes("no such file") || normalized.includes("enoent");
+    }
+
+    private enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+        const result = this.mutationQueue.then(operation);
+        this.mutationQueue = result.then(
+            () => undefined,
+            () => undefined,
+        );
+        return result;
     }
 }

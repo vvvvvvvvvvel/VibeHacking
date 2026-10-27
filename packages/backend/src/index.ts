@@ -5,8 +5,8 @@ export type { BackendEvents } from "./types/events";
 
 export function init(sdk: MCPSDK) {
     const mcp = new McpHttpServer(sdk);
-    sdk.api.register("initializeMcpServer", async () => {
-        return await mcp.initializeMcpServer();
+    sdk.api.register("getMcpServerState", () => {
+        return Promise.resolve(mcp.getMcpServerState());
     });
     sdk.api.register("getMcpServerSettings", () => {
         return Promise.resolve(mcp.getMcpServerSettings());
@@ -42,6 +42,7 @@ export function init(sdk: MCPSDK) {
             return resolved !== null;
         },
     );
+    void mcp.initializeMcpServer().catch(() => undefined);
 }
 
 void init;

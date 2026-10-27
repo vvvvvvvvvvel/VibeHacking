@@ -473,7 +473,7 @@ const draftPort = ref<number | undefined>(undefined);
 const mcpGuideOpen = ref(false);
 const apiGuideOpen = ref(false);
 const stopBackendEvents: Array<() => void> = [];
-const SKILL_URL = "https://github.com/vvvvvvvvvvel/VibeHacking/blob/main/SKILL.md";
+const SKILL_URL = "https://github.com/vvvvvvvvvvel/VibeHacking/blob/main/skills/caido-mcp/SKILL.md";
 type ClientGuideExample = {
     title: string;
     description?: string;
@@ -505,36 +505,17 @@ const applySettings = (next: McpSettings) => {
     draftPort.value = next.port;
 };
 
-const initializeServer = async () => {
+const loadServerState = async () => {
     try {
-        await sdk.backend.initializeMcpServer();
+        const state = await sdk.backend.getMcpServerState();
+        applySettings(state.settings);
+        toolPermissions.value = state.toolPermissions;
     } catch (err) {
-        sdk.window.showToast(`Failed to initialize MCP.\n${err}`, {
-            variant: "error",
-        });
-    }
-};
-
-const fetchSettings = async () => {
-    try {
-        const next = await sdk.backend.getMcpServerSettings();
-        applySettings(next);
-    } catch (err) {
-        sdk.window.showToast(`Failed to load MCP settings.\n${err}`, {
+        sdk.window.showToast(`Failed to load MCP state.\n${err}`, {
             variant: "error",
         });
     } finally {
         loading.value = false;
-    }
-};
-
-const fetchToolPermissions = async () => {
-    try {
-        toolPermissions.value = await sdk.backend.getToolGroupPermissionModes();
-    } catch (err) {
-        sdk.window.showToast(`Failed to load tool settings.\n${err}`, {
-            variant: "error",
-        });
     }
 };
 
@@ -789,8 +770,7 @@ const onToggle = async (value: boolean) => {
 
 onMounted(async () => {
     registerBackendStateEvents();
-    await initializeServer();
-    await Promise.all([fetchSettings(), fetchToolPermissions()]);
+    await loadServerState();
     const doc = typeof document === "undefined" ? undefined : document;
     if (doc !== undefined) {
         doc.addEventListener("click", handleOutsideClick);

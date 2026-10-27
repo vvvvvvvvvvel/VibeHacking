@@ -41,7 +41,7 @@ const toGraphqlFilterInput = (input: {
     global: input.global,
 });
 
-export const registerFilterTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerFilterTools = ({ server, sdk, graphql, store, permissions }: ToolContext) => {
     const idSchema = z.preprocess(
         (value) => (typeof value === "number" ? String(value) : value),
         z.string().min(1),
@@ -69,7 +69,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
         description: "List saved HTTPQL filters.",
         inputSchema: listFilterPresetsSchema,
         handler: async () => {
-            const response = await sdk.graphql.execute(LIST_FILTER_PRESETS_QUERY);
+            const response = await graphql.execute(LIST_FILTER_PRESETS_QUERY);
             const data = response.data as { filterPresets?: unknown[] } | undefined;
             if (data?.filterPresets !== undefined) {
                 return {
@@ -99,7 +99,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
             const { ids } = getFilterPresetSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(GET_FILTER_PRESET_QUERY, { id });
+                    const response = await graphql.execute(GET_FILTER_PRESET_QUERY, { id });
                     const data = response.data as { filterPreset?: unknown } | undefined;
                     if (data?.filterPreset !== undefined) {
                         return {
@@ -134,7 +134,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
                     if (validationError !== null) {
                         return { input: item, error: validationError };
                     }
-                    const response = await sdk.graphql.execute<{
+                    const response = await graphql.execute<{
                         createFilterPreset?: { filter?: unknown; error?: unknown };
                     }>(CREATE_FILTER_PRESET_MUTATION, { input: toGraphqlFilterInput(item) });
                     const data = response.data;
@@ -180,7 +180,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
                     ],
                 };
             }
-            const response = await sdk.graphql.execute<{
+            const response = await graphql.execute<{
                 updateFilterPreset?: { filter?: unknown; error?: unknown };
             }>(UPDATE_FILTER_PRESET_MUTATION, { id, input: toGraphqlFilterInput(input) });
             const data = response.data;
@@ -215,7 +215,7 @@ export const registerFilterTools = ({ server, sdk, store, permissions }: ToolCon
             const { ids } = deleteFilterPresetSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(DELETE_FILTER_PRESET_MUTATION, {
+                    const response = await graphql.execute(DELETE_FILTER_PRESET_MUTATION, {
                         id,
                     });
                     return { id, result: response.data ?? response };

@@ -148,7 +148,13 @@ const normalizeFinding = (node: FindingNode, cursor?: string, http?: unknown) =>
     http,
 });
 
-export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerFindingsTools = ({
+    server,
+    sdk,
+    graphql,
+    store,
+    permissions,
+}: ToolContext) => {
     const normalizeInputs = (input: { dedupe_keys?: string[]; request_ids?: string[] }) => {
         const normalizedDedupeKeys = input.dedupe_keys?.filter((key) => key.length > 0) ?? [];
         const normalizedRequestIds = input.request_ids?.filter((id) => id.length > 0) ?? [];
@@ -311,7 +317,7 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
             );
             const serialization = normalizeHttpSerialization(input.serialization, materialization);
             const regexExcerpt = resolveRegexExcerpt(input.serialization);
-            const response = await sdk.graphql.execute<ListFindingsResponse>(LIST_FINDINGS_QUERY, {
+            const response = await graphql.execute<ListFindingsResponse>(LIST_FINDINGS_QUERY, {
                 ...cursorVariables(input),
                 filter: input.filter,
                 order: input.order,
@@ -365,10 +371,9 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
             if (finding_ids !== undefined && finding_ids.length > 0) {
                 const results = [];
                 for (const id of finding_ids) {
-                    const response = await sdk.graphql.execute<GetFindingResponse>(
-                        GET_FINDING_QUERY,
-                        { id },
-                    );
+                    const response = await graphql.execute<GetFindingResponse>(GET_FINDING_QUERY, {
+                        id,
+                    });
                     const finding = response.data?.finding;
                     if (finding === undefined || finding === null) {
                         results.push({ id, found: false, error: response.errors });
@@ -549,7 +554,7 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
             const { items } = findingUpdateSchema.parse(params);
             const results = await Promise.all(
                 items.map(async (item) => {
-                    const response = await sdk.graphql.execute(UPDATE_FINDING_MUTATION, item);
+                    const response = await graphql.execute(UPDATE_FINDING_MUTATION, item);
                     return { id: item.id, result: response.data ?? response };
                 }),
             );
@@ -567,7 +572,7 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
         inputSchema: findingDeleteSchema,
         handler: async (params) => {
             const { ids, reporter } = findingDeleteSchema.parse(params);
-            const response = await sdk.graphql.execute(DELETE_FINDINGS_MUTATION, {
+            const response = await graphql.execute(DELETE_FINDINGS_MUTATION, {
                 input: { ids, reporter },
             });
             const errors = (response as { errors?: Array<{ message?: string }> }).errors;
@@ -576,7 +581,7 @@ export const registerFindingsTools = ({ server, sdk, store, permissions }: ToolC
                     String(error?.message ?? "").includes('Unknown argument "input"'),
                 ) ?? false;
             if (hasUnknownInput) {
-                const fallback = await sdk.graphql.execute(
+                const fallback = await graphql.execute(
                     `
                           mutation deleteFindings($ids: [ID!]!, $reporter: String) {
                             deleteFindings(ids: $ids, reporter: $reporter) {

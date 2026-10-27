@@ -1,6 +1,6 @@
 ---
 name: caido-mcp
-description: Use the Caido MCP tools to inspect and act on captured HTTP/WebSocket traffic in Caido — HTTP history, Sitemap, WebSocket, Replay, scopes, proxy passthrough, findings, filters, environments, and Tamper (Match & Replace) rules. Covers HTTPQL filtering (including host filtering when scope is broad), compact field projections, regex excerpts, and safe evidence-focused workflows. Use whenever the task involves reading Caido traffic or driving Caido through MCP.
+description: Use the Caido MCP tools to inspect and act on captured HTTP/WebSocket traffic in Caido — HTTP history, Sitemap, WebSocket, Automate, Replay, scopes, proxy traffic control, findings, filters, environments, and Tamper (Match & Replace) rules. Covers HTTPQL filtering (including host filtering when scope is broad), compact field projections, regex excerpts, and safe evidence-focused workflows. Use whenever the task involves reading Caido traffic or driving Caido through MCP.
 metadata:
     author: vvvvvvvvvvel
     compatibility: Requires a running Caido instance with the Vibe Hacking MCP plugin installed and reachable by the agent.
@@ -21,7 +21,7 @@ Drive Caido through MCP: discover traffic read-only, narrow with Caido-native fi
 
 Keep broad discovery body-light. Do not request raw bodies unless they are necessary evidence.
 
-Use `get_proxy_passthrough_options` before changing proxy passthrough behavior. Use `set_proxy_passthrough_options` only when the user wants Caido to bypass/allow/deny specific targets.
+Use `get_proxy_traffic_control` before changing capture behavior. Use `set_proxy_traffic_control` only when the user wants to switch between all, in-scope-only, or custom capture/passthrough lists.
 
 ## Scope
 
@@ -131,11 +131,18 @@ Use `send_requests` only for active validation. It sends saved requests by ID:
 }
 ```
 
-To send a hand-crafted or modified request that is not saved, use `send_raw_requests` with base64 raw HTTP plus host/port/is_tls:
+To send a hand-crafted or modified request that is not saved, use `send_raw_requests` with plain raw HTTP plus host/port/is_tls. Use `raw_base64` instead of `raw_text` only when binary request bytes must be preserved:
 
 ```json
 {
-    "items": [{ "raw_base64": "<base64>", "host": "example.com", "port": 443, "is_tls": true }],
+    "items": [
+        {
+            "raw_text": "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
+            "host": "example.com",
+            "port": 443,
+            "is_tls": true
+        }
+    ],
     "options": { "save": true }
 }
 ```
@@ -220,10 +227,32 @@ List streams first, then messages by stream:
 }
 ```
 
+## Automate
+
+Use `list_automate_sessions` to discover sessions, then `get_automate_session` to inspect settings and entry IDs. Use `get_automate_entry` for exact entry settings and request count. Page generated traffic with `list_automate_entry_requests`; it supports HTTPQL, native cursors, order, field projection, and the same HTTP serialization and `regex_excerpt` controls as history.
+
+```json
+{
+    "entry_id": 12,
+    "limit": 50,
+    "filter": "resp.code.eq:200",
+    "order": { "by": "POSITION", "direction": "asc" },
+    "fields": [
+        "cursor",
+        "sequence_id",
+        "payloads",
+        "extracts",
+        "id",
+        "request.url",
+        "response.status_code"
+    ]
+}
+```
+
 ## Replay and Other Tools
 
-- Replay: find source requests in history, then use `send_to_replay` or `send_to_replay_from_filter` to build sessions. Use `create_replay_pipeline_session` when preparing Caido's HTTP/1 pipeline Replay flow for ordered/last-byte/single-packet validation. Use `start_replay_task` (by `session_ids`) only when active Replay execution of those sessions is intended; it sends each session's current request. For a modified/crafted raw request, prefer `send_raw_requests`.
-- Proxy passthrough: use `get_proxy_passthrough_options` to inspect allowlist, denylist, and out-of-scope passthrough. Use `set_proxy_passthrough_options` to update only the intended fields; omitted fields keep their current values.
+- Replay: find source requests in history, then use `send_to_replay` or `send_to_replay_from_filter` to build sessions. `create_replay_session` can also prepare a session directly from `raw_requests` without sending traffic. Use `create_replay_pipeline_session` when preparing Caido's HTTP pipeline Replay flow for ordered/last-byte/single-packet validation. Use `start_replay_task` (by `session_ids`) only when active Replay execution of those sessions is intended; it sends each session's current request.
+- Proxy traffic control: use `get_proxy_traffic_control` to inspect the current mode and custom lists. Use `set_proxy_traffic_control` to select `all`, `in_scope`, or `custom`; custom mode accepts `capture_list` and `passthrough_list`.
 - Scopes: see the Scope section. Use `list_scopes` / `get_scope` / `check_requests_scope` only when scope membership matters.
 - Filters: use `list_filter_presets` and `get_filter_preset` to reuse saved HTTPQL.
 - Findings: check existing findings before creating or updating.

@@ -64,7 +64,7 @@ const REPLAY_ENTRY_FIELDS = `
         id
       }
     }
-    ... on ReplayEntryHttpOnePipeline {
+    ... on ReplayEntryHttpPipeline {
       settings {
         strategy {
           ...ReplayPipelineStrategyFields
@@ -120,6 +120,30 @@ export const CREATE_REPLAY_COLLECTION_MUTATION = `
   }
 `;
 
+export const CREATE_REPLAY_SESSION_MUTATION = `
+  mutation createReplaySession($input: CreateReplaySessionInput!) {
+    createReplaySession(input: $input) {
+      session {
+        id
+        name
+        __typename
+      }
+      error {
+        __typename
+        ... on UserError {
+          code
+        }
+        ... on PermissionDeniedUserError {
+          permissionReason: reason
+        }
+        ... on CloudUserError {
+          cloudReason: reason
+        }
+      }
+    }
+  }
+`;
+
 export const LIST_REPLAY_COLLECTIONS_QUERY = `
   query replaySessionCollections($first: Int, $after: String, $last: Int, $before: String) {
     replaySessionCollections(first: $first, after: $after, last: $last, before: $before) {
@@ -153,7 +177,7 @@ export const LIST_REPLAY_COLLECTIONS_DETAILED_QUERY = `
           id
           name
           __typename
-          ... on ReplaySessionHttpOnePipeline {
+          ... on ReplaySessionHttpPipeline {
             settings {
               strategy {
                 ...ReplayPipelineStrategyFields
@@ -178,7 +202,7 @@ export const LIST_REPLAY_COLLECTIONS_DETAILED_QUERY = `
               }
             }
           }
-          ... on ReplaySessionHttpOnePipeline {
+          ... on ReplaySessionHttpPipeline {
             collection {
               id
               name
@@ -242,7 +266,7 @@ export const LIST_REPLAY_SESSIONS_QUERY = `
             name
           }
         }
-        ... on ReplaySessionHttpOnePipeline {
+        ... on ReplaySessionHttpPipeline {
           collection {
             id
             name
@@ -285,7 +309,7 @@ export const GET_REPLAY_SESSION_QUERY = `
           name
         }
       }
-      ... on ReplaySessionHttpOnePipeline {
+      ... on ReplaySessionHttpPipeline {
         collection {
           id
           name
@@ -339,7 +363,7 @@ export const MOVE_REPLAY_SESSION_MUTATION = `
             name
           }
         }
-        ... on ReplaySessionHttpOnePipeline {
+        ... on ReplaySessionHttpPipeline {
           collection {
             id
             name
@@ -356,9 +380,9 @@ export const MOVE_REPLAY_SESSION_MUTATION = `
   }
 `;
 
-export const CREATE_REPLAY_PIPELINE_HTTP_ONE_SESSION_MUTATION = `
-  mutation createReplayPipelineHttpOneSession($input: CreateReplayPipelineSessionInput!, $entryFirst: Int) {
-    createReplayPipelineHttpOneSession(input: $input) {
+export const CREATE_REPLAY_PIPELINE_HTTP_SESSION_MUTATION = `
+  mutation createReplayPipelineHttpSession($input: CreateReplayPipelineSessionInput!, $entryFirst: Int) {
+    createReplayPipelineHttpSession(input: $input) {
       session {
         id
         name
@@ -397,10 +421,10 @@ export const CREATE_REPLAY_PIPELINE_HTTP_ONE_SESSION_MUTATION = `
           code
         }
         ... on PermissionDeniedUserError {
-          reason
+          permissionReason: reason
         }
         ... on CloudUserError {
-          reason
+          cloudReason: reason
         }
       }
     }

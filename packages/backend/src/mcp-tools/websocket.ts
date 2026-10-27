@@ -291,10 +291,10 @@ const countValue = (connection?: { count?: { value?: number }; edges?: unknown[]
     connection?.count?.value ?? connection?.edges?.length ?? 0;
 
 const queryWebSocketStreams = async (
-    sdk: ToolContext["sdk"],
+    graphql: ToolContext["graphql"],
     input: z.infer<typeof listStreamsSchema>,
 ) => {
-    const response = await sdk.graphql.execute<StreamsResponse>(LIST_STREAMS_QUERY, {
+    const response = await graphql.execute<StreamsResponse>(LIST_STREAMS_QUERY, {
         ...cursorVariables(input),
         scopeId: input.scope_id ?? undefined,
         order: input.order,
@@ -325,12 +325,12 @@ const queryWebSocketStreams = async (
 };
 
 const queryWebSocketMessages = async (
-    sdk: ToolContext["sdk"],
+    graphql: ToolContext["graphql"],
     input: ListWsMessagesInput,
     projection: FieldProjection | undefined,
 ) => {
     const options = normalizeWebSocketSerialization(input.serialization);
-    const response = await sdk.graphql.execute<StreamWsMessagesResponse>(
+    const response = await graphql.execute<StreamWsMessagesResponse>(
         LIST_STREAM_WS_MESSAGES_QUERY,
         {
             streamId: input.stream_id,
@@ -358,7 +358,13 @@ const queryWebSocketMessages = async (
     };
 };
 
-export const registerWebsocketTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerWebsocketTools = ({
+    server,
+    sdk,
+    graphql,
+    store,
+    permissions,
+}: ToolContext) => {
     registerToolAction(server, sdk, store, permissions, {
         action: "sdk.websocket.listStreams",
         group: ToolGroupId.WsSafe,
@@ -369,7 +375,7 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
         inputSchema: listStreamsSchema,
         handler: async (params) => {
             const input = listStreamsSchema.parse(params);
-            const result = await queryWebSocketStreams(sdk, input);
+            const result = await queryWebSocketStreams(graphql, input);
             return { content: [{ type: "text", text: stringifyResult(result) }] };
         },
     });
@@ -384,7 +390,7 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
             const { ids } = getStreamsSchema.parse(params);
             const results = [];
             for (const id of ids) {
-                const response = await sdk.graphql.execute<StreamResponse>(GET_STREAM_QUERY, {
+                const response = await graphql.execute<StreamResponse>(GET_STREAM_QUERY, {
                     id,
                 });
                 const stream = normalizeStream(response.data?.stream);
@@ -424,7 +430,7 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
                 excludeFields: input.exclude_fields,
                 allowedPaths: WS_MESSAGE_FIELD_PATHS,
             });
-            const result = await queryWebSocketMessages(sdk, input, projection);
+            const result = await queryWebSocketMessages(graphql, input, projection);
             return { content: [{ type: "text", text: stringifyResult(result) }] };
         },
     });
@@ -447,7 +453,7 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
             const options = normalizeWebSocketSerialization(input.serialization);
             const results = [];
             for (const id of input.ids) {
-                const response = await sdk.graphql.execute<StreamWsMessageResponse>(
+                const response = await graphql.execute<StreamWsMessageResponse>(
                     GET_STREAM_WS_MESSAGE_QUERY,
                     { id },
                 );
@@ -486,7 +492,7 @@ export const registerWebsocketTools = ({ server, sdk, store, permissions }: Tool
             const options = normalizeWebSocketSerialization(input.serialization);
             const results = [];
             for (const id of input.ids) {
-                const response = await sdk.graphql.execute<StreamWsMessageEditResponse>(
+                const response = await graphql.execute<StreamWsMessageEditResponse>(
                     GET_STREAM_WS_MESSAGE_EDIT_QUERY,
                     { id },
                 );

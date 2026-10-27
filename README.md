@@ -1,10 +1,10 @@
 # Vibe Hacking
 
-A Caido MCP plugin that exposes a clean, safe, and well‑documented tool surface for agents. It standardizes tool schemas, descriptions, and behaviors across requests, replay, filters, scopes, tamper rules, and WebSocket history.
+A Caido MCP plugin that exposes a clean, safe, and well-documented tool surface for agents. It standardizes tool schemas, descriptions, and behaviors across requests, Automate, Replay, filters, scopes, traffic control, Tamper rules, and WebSocket history.
 
 ## Highlights
 
-- **MCP‑native**: exposes an MCP server over Streamable HTTP inside Caido.
+- **MCP-native**: exposes an MCP server over Streamable HTTP inside Caido.
 - **Tool governance**: group tools into safe/unsafe buckets and control them with `auto`, `confirm`, or `disabled` modes.
 - **Clear UX**: user‑friendly tool names in the UI (no SDK internals).
 - **History-first output**: request and WebSocket tools use stable list/get envelopes, Caido-native filters, field projection, and bounded body serialization.
@@ -20,13 +20,17 @@ A Caido MCP plugin that exposes a clean, safe, and well‑documented tool surfac
 
 ## Compatibility
 
-- **Caido**: v0.55.1+
+- **Caido**: v0.59.0+
 
 ## Usage
 
 - Open the plugin page in Caido.
 - Use the **Tools** section to set each group to `auto`, `confirm`, or `disabled`.
 - Call tools from your agent and rely on consistent JSON outputs.
+
+The repository also includes agent workflow guides under [`skills/`](./skills/). The canonical
+guide is [`skills/caido-mcp/SKILL.md`](./skills/caido-mcp/SKILL.md); each skill keeps its own
+references inside its bundle.
 
 ## API Control
 
@@ -85,6 +89,13 @@ WebSocket/SSE:
 - `get_websocket_messages_by_ids`
 - `get_websocket_message_edits_by_ids`
 
+Automate:
+
+- `list_automate_sessions`
+- `get_automate_session`
+- `get_automate_entry`
+- `list_automate_entry_requests`
+
 Sitemap:
 
 - `list_sitemap_roots`
@@ -105,6 +116,11 @@ Environment:
 - `list_environment_variables`
 - `set_environment_variable`
 
+Proxy traffic control:
+
+- `get_proxy_traffic_control`
+- `set_proxy_traffic_control`
+
 Other existing groups cover Replay, Tamper rules, scopes, findings, hosted files, and project/runtime info.
 
 Example request discovery:
@@ -121,6 +137,7 @@ Example request discovery:
 
 ```bash
 pnpm install
+pnpm check
 pnpm build
 ```
 

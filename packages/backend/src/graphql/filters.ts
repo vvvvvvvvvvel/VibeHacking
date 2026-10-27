@@ -46,11 +46,11 @@ ${FILTER_PRESET_FIELDS}
           code
         }
         ... on PermissionDeniedUserError {
-          reason
+          permissionReason: reason
           code
         }
         ... on CloudUserError {
-          reason
+          cloudReason: reason
           code
         }
         ... on OtherUserError {

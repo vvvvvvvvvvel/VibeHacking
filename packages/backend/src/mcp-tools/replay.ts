@@ -5,7 +5,8 @@ import { z } from "zod";
 
 import {
     CREATE_REPLAY_COLLECTION_MUTATION,
-    CREATE_REPLAY_PIPELINE_HTTP_ONE_SESSION_MUTATION,
+    CREATE_REPLAY_PIPELINE_HTTP_SESSION_MUTATION,
+    CREATE_REPLAY_SESSION_MUTATION,
     DELETE_REPLAY_COLLECTION_MUTATION,
     DELETE_REPLAY_SESSIONS_MUTATION,
     GET_REPLAY_ENTRY_QUERY,
@@ -21,6 +22,11 @@ import {
 } from "../graphql";
 import { ToolGroupId } from "../tool-permissions";
 
+import {
+    decodeRawHttpRequest,
+    rawHttpRequestConnection,
+    rawHttpRequestSchema,
+} from "./raw-request";
 import { registerToolAction, type ToolContext } from "./register";
 import type { SerializationOptions } from "./shared";
 import {
@@ -43,6 +49,18 @@ type RenameReplaySessionResponse = {
 
 type CreateReplayCollectionResponse = {
     createReplaySessionCollection?: { collection?: { id: string; name: string } };
+};
+
+type CreateReplaySessionResponse = {
+    createReplaySession?: {
+        session?: ReplaySessionGql;
+        error?: {
+            __typename?: string;
+            code?: string;
+            permissionReason?: string;
+            cloudReason?: string;
+        };
+    };
 };
 
 type DeleteReplayCollectionResponse = {
@@ -167,7 +185,7 @@ type MoveReplaySessionResponse = {
 };
 
 type CreateReplayPipelineSessionResponse = {
-    createReplayPipelineHttpOneSession?: {
+    createReplayPipelineHttpSession?: {
         session?: ReplaySessionGql & {
             entries?: {
                 pageInfo: {
@@ -180,7 +198,12 @@ type CreateReplayPipelineSessionResponse = {
                 nodes: ReplayEntryGql[];
             };
         };
-        error?: { __typename?: string; code?: string; reason?: string };
+        error?: {
+            __typename?: string;
+            code?: string;
+            permissionReason?: string;
+            cloudReason?: string;
+        };
     };
 };
 
@@ -209,10 +232,20 @@ const idSchema = z.preprocess(
 
 const replayCreateSessionSchema = z
     .object({
-        request_ids: z.array(idSchema).min(1),
+        request_ids: z.array(idSchema).min(1).optional(),
+        raw_requests: z.array(rawHttpRequestSchema).min(1).optional(),
         collection_id: idSchema.optional(),
     })
-    .strict();
+    .strict()
+    .superRefine((value, context) => {
+        if (value.request_ids === undefined && value.raw_requests === undefined) {
+            context.addIssue({
+                code: "custom",
+                message: "Provide request_ids, raw_requests, or both",
+                path: ["request_ids"],
+            });
+        }
+    });
 
 const replayCollectionSchema = z.object({ id: idSchema, name: z.string().min(1) }).strict();
 const replaySessionSchema = z.object({ id: idSchema, name: z.string().min(1) }).strict();
@@ -261,7 +294,7 @@ const serializationSchema = z
     })
     .strict();
 
-const replaySessionKindSchema = ciEnum(["http", "http_one_pipeline", "ws"]);
+const replaySessionKindSchema = ciEnum(["http", "http_pipeline", "ws"]);
 
 const detailedCollectionsSchema = paginationSchema.extend({
     include_request: z.boolean().optional(),
@@ -391,8 +424,8 @@ const toSerializationOptions = (
 
 const toGraphqlReplaySessionKind = (value: z.infer<typeof replaySessionKindSchema>) => {
     switch (value) {
-        case "http_one_pipeline":
-            return "HTTP_ONE_PIPELINE";
+        case "http_pipeline":
+            return "HTTP_PIPELINE";
         case "ws":
             return "WS";
         case "http":
@@ -583,7 +616,7 @@ const loadReplayRequestDetailsMap = async ({
     return requestMap;
 };
 
-export const registerReplayTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerReplayTools = ({ server, sdk, graphql, store, permissions }: ToolContext) => {
     const resolveReplayCollection = async ({
         collectionId: inputCollectionId,
         collectionName,
@@ -627,7 +660,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                 collectionResolved = { id: collectionId, name: existing.getName() };
                 collectionRef = existing;
             } else if (shouldCreateCollection) {
-                const created = await sdk.graphql.execute<CreateReplayCollectionResponse>(
+                const created = await graphql.execute<CreateReplayCollectionResponse>(
                     CREATE_REPLAY_COLLECTION_MUTATION,
                     { input: { name: collectionName } },
                 );
@@ -714,19 +747,16 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                 );
                 const createdId = String(session.getId());
                 if (collectionId !== undefined) {
-                    await sdk.graphql.execute<MoveReplaySessionResponse>(
-                        MOVE_REPLAY_SESSION_MUTATION,
-                        {
-                            id: createdId,
-                            collectionId,
-                        },
-                    );
+                    await graphql.execute<MoveReplaySessionResponse>(MOVE_REPLAY_SESSION_MUTATION, {
+                        id: createdId,
+                        collectionId,
+                    });
                 }
                 let resolvedName = session.getName();
                 if (sessionName !== undefined && sessionName !== "") {
                     resolvedName =
                         requestIds.length === 1 ? sessionName : `${sessionName} #${index + 1}`;
-                    const renamed = await sdk.graphql.execute<RenameReplaySessionResponse>(
+                    const renamed = await graphql.execute<RenameReplaySessionResponse>(
                         RENAME_REPLAY_SESSION_MUTATION,
                         { id: createdId, name: resolvedName },
                     );
@@ -760,7 +790,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         description: "List Replay collections with cursor pagination.",
         inputSchema: paginationSchema,
         handler: async (params) => {
-            const response = await sdk.graphql.execute<ReplayCollectionsResponse>(
+            const response = await graphql.execute<ReplayCollectionsResponse>(
                 LIST_REPLAY_COLLECTIONS_QUERY,
                 params,
             );
@@ -795,7 +825,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const resolvedIncludeRequest = include_request ?? true;
             const resolvedOnlyLatestEntryDetails = only_latest_entry_details ?? true;
             const resolvedIncludeRawWhenMissing = include_raw_when_request_missing ?? true;
-            const response = await sdk.graphql.execute<ReplayCollectionsDetailedResponse>(
+            const response = await graphql.execute<ReplayCollectionsDetailedResponse>(
                 LIST_REPLAY_COLLECTIONS_DETAILED_QUERY,
                 pagination,
             );
@@ -868,7 +898,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         description: "List Replay sessions with cursor pagination.",
         inputSchema: paginationSchema,
         handler: async (params) => {
-            const response = await sdk.graphql.execute<ReplaySessionsResponse>(
+            const response = await graphql.execute<ReplaySessionsResponse>(
                 LIST_REPLAY_SESSIONS_QUERY,
                 params,
             );
@@ -888,7 +918,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const { session_ids } = replayGetSessionSchema.parse(params);
             const results = await Promise.all(
                 session_ids.map(async (id) => {
-                    const response = await sdk.graphql.execute<ReplaySessionResponse>(
+                    const response = await graphql.execute<ReplaySessionResponse>(
                         GET_REPLAY_SESSION_QUERY,
                         { id },
                     );
@@ -919,7 +949,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         description:
             "Get Replay entries by ID. " +
             'Example: { "entry_ids": [1], "session_kind": "http", "include_request": true }. ' +
-            "Use session_kind=http_one_pipeline for pipeline entries or pass entries with per-entry session_kind. " +
+            "Use session_kind=http_pipeline for pipeline entries or pass entries with per-entry session_kind. " +
             "If include_request is true, request_details/response_details are added when available. " +
             "Bodies are included by default; set serialization.include_body=false to omit. " +
             "If a request is missing, raw is returned by default; set include_raw_when_request_missing=false to omit.",
@@ -944,7 +974,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const results = [];
             for (const input of entryInputs) {
                 const id = input.id;
-                const response = await sdk.graphql.execute<ReplayEntryResponse>(
+                const response = await graphql.execute<ReplayEntryResponse>(
                     GET_REPLAY_ENTRY_QUERY,
                     {
                         id,
@@ -1005,26 +1035,88 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         group: ToolGroupId.ReplaySafe,
         toolName: "create_replay_session",
         description:
-            "Create Replay sessions from request IDs. " +
-            'Example: { "request_ids": [1], "collection_id": 1 }.',
+            "Create Replay sessions from saved request IDs, crafted raw HTTP requests, or both. " +
+            "Raw requests require exactly one of raw_text (UTF-8 HTTP) or raw_base64 (binary-safe HTTP), plus host/port/is_tls. " +
+            "This prepares sessions without sending traffic. " +
+            'Example: { "raw_requests": [{ "raw_text": "GET / HTTP/1.1\\r\\nHost: example.com\\r\\n\\r\\n", "host": "example.com", "port": 443, "is_tls": true }], "collection_id": 1 }.',
         inputSchema: replayCreateSessionSchema,
         handler: async (params) => {
-            const { request_ids, collection_id } = replayCreateSessionSchema.parse(params);
-            const results = await Promise.all(
-                request_ids.map(async (requestId) => {
-                    const session = await sdk.replay.createSession(
-                        toId(requestId),
-                        collection_id !== undefined && collection_id !== ""
-                            ? toId(collection_id)
-                            : undefined,
-                    );
-                    return {
-                        requestId,
-                        id: String(session.getId()),
-                        name: session.getName(),
-                    };
+            const { request_ids, raw_requests, collection_id } =
+                replayCreateSessionSchema.parse(params);
+            const resolvedCollectionId =
+                collection_id !== undefined && collection_id !== ""
+                    ? toId(collection_id)
+                    : undefined;
+            const savedResults = await Promise.all(
+                (request_ids ?? []).map(async (requestId) => {
+                    try {
+                        const session = await sdk.replay.createSession(
+                            toId(requestId),
+                            resolvedCollectionId,
+                        );
+                        return {
+                            ok: true,
+                            requestId,
+                            id: String(session.getId()),
+                            name: session.getName(),
+                        };
+                    } catch (error) {
+                        return {
+                            ok: false,
+                            requestId,
+                            error: error instanceof Error ? error.message : String(error),
+                        };
+                    }
                 }),
             );
+            const rawResults = await Promise.all(
+                (raw_requests ?? []).map(async (rawRequest, index) => {
+                    try {
+                        const connectionInfo = rawHttpRequestConnection(rawRequest);
+                        const input: Record<string, unknown> = {
+                            kind: "HTTP",
+                            requestSource: {
+                                raw: {
+                                    connectionInfo: {
+                                        host: connectionInfo.host,
+                                        port: connectionInfo.port,
+                                        isTLS: connectionInfo.isTls,
+                                    },
+                                    raw: decodeRawHttpRequest(rawRequest).toString("base64"),
+                                },
+                            },
+                        };
+                        if (resolvedCollectionId !== undefined) {
+                            input.collectionId = resolvedCollectionId;
+                        }
+                        const response = await graphql.execute<CreateReplaySessionResponse>(
+                            CREATE_REPLAY_SESSION_MUTATION,
+                            { input },
+                        );
+                        const payload = response.data?.createReplaySession;
+                        if (payload?.session === undefined || payload.session === null) {
+                            return {
+                                ok: false,
+                                rawRequestIndex: index,
+                                error: payload?.error ?? response.data ?? response,
+                            };
+                        }
+                        return {
+                            ok: true,
+                            rawRequestIndex: index,
+                            id: payload.session.id,
+                            name: payload.session.name,
+                        };
+                    } catch (error) {
+                        return {
+                            ok: false,
+                            rawRequestIndex: index,
+                            error: error instanceof Error ? error.message : String(error),
+                        };
+                    }
+                }),
+            );
+            const results = [...savedResults, ...rawResults];
             return { content: [{ type: "text", text: stringifyResult(results) }] };
         },
     });
@@ -1096,7 +1188,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         group: ToolGroupId.ReplaySafe,
         toolName: "create_replay_pipeline_session",
         description:
-            "Create a Replay HTTP/1 pipeline session from saved request IDs. " +
+            "Create a Replay HTTP pipeline session from saved request IDs. " +
             "This only prepares the Replay session; use start_replay_task to execute it. " +
             "Strategies: sequential, last_byte_synchronization, single_packet_attack. " +
             'Example: { "request_ids": [1, 2], "collection_name": "Race tests", "strategy": { "type": "single_packet_attack", "failure_behavior": "abort_on_partial", "convert_to_http2": true } }.',
@@ -1139,14 +1231,14 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                 input.collectionId = collectionId;
             }
 
-            const response = await sdk.graphql.execute<CreateReplayPipelineSessionResponse>(
-                CREATE_REPLAY_PIPELINE_HTTP_ONE_SESSION_MUTATION,
+            const response = await graphql.execute<CreateReplayPipelineSessionResponse>(
+                CREATE_REPLAY_PIPELINE_HTTP_SESSION_MUTATION,
                 {
                     input,
                     entryFirst: parsed.entry_limit,
                 },
             );
-            const payload = response.data?.createReplayPipelineHttpOneSession;
+            const payload = response.data?.createReplayPipelineHttpSession;
             if (payload?.session === undefined || payload.session === null) {
                 return {
                     content: [
@@ -1164,7 +1256,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
 
             let session = payload.session;
             if (parsed.session_name !== undefined && parsed.session_name !== "") {
-                const renamed = await sdk.graphql.execute<RenameReplaySessionResponse>(
+                const renamed = await graphql.execute<RenameReplaySessionResponse>(
                     RENAME_REPLAY_SESSION_MUTATION,
                     { id: payload.session.id, name: parsed.session_name },
                 );
@@ -1198,11 +1290,10 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         handler: async (params) => {
             const { pipeline_entry_id, http_entry_id } =
                 setActiveReplayPipelineEntrySchema.parse(params);
-            const response =
-                await sdk.graphql.execute<SetActiveReplayPipelineEntryHttpEntryResponse>(
-                    SET_ACTIVE_REPLAY_PIPELINE_ENTRY_HTTP_ENTRY_MUTATION,
-                    { id: pipeline_entry_id, httpEntryId: http_entry_id },
-                );
+            const response = await graphql.execute<SetActiveReplayPipelineEntryHttpEntryResponse>(
+                SET_ACTIVE_REPLAY_PIPELINE_ENTRY_HTTP_ENTRY_MUTATION,
+                { id: pipeline_entry_id, httpEntryId: http_entry_id },
+            );
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -1219,7 +1310,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const { names } = replayCreateCollectionSchema.parse(params);
             const results = await Promise.all(
                 names.map(async (name) => {
-                    const response = await sdk.graphql.execute<CreateReplayCollectionResponse>(
+                    const response = await graphql.execute<CreateReplayCollectionResponse>(
                         CREATE_REPLAY_COLLECTION_MUTATION,
                         { input: { name } },
                     );
@@ -1246,7 +1337,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
                 items.map(async (item) => {
                     const moved = await Promise.all(
                         item.ids.map(async (id) => {
-                            const response = await sdk.graphql.execute<MoveReplaySessionResponse>(
+                            const response = await graphql.execute<MoveReplaySessionResponse>(
                                 MOVE_REPLAY_SESSION_MUTATION,
                                 { id, collectionId: item.collection_id },
                             );
@@ -1282,7 +1373,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const { session_ids } = startReplayTaskSchema.parse(params);
             const results = await Promise.all(
                 session_ids.map(async (sessionId) => {
-                    const response = await sdk.graphql.execute<StartReplayTaskResponse>(
+                    const response = await graphql.execute<StartReplayTaskResponse>(
                         START_REPLAY_TASK_MUTATION,
                         { sessionId },
                     );
@@ -1303,7 +1394,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const { items } = replayRenameCollectionSchema.parse(params);
             const results = await Promise.all(
                 items.map(async ({ id, name }) => {
-                    const response = await sdk.graphql.execute<RenameReplayCollectionResponse>(
+                    const response = await graphql.execute<RenameReplayCollectionResponse>(
                         RENAME_REPLAY_COLLECTION_MUTATION,
                         { id, name },
                     );
@@ -1328,7 +1419,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const { items } = replayRenameSessionSchema.parse(params);
             const results = await Promise.all(
                 items.map(async ({ id, name }) => {
-                    const response = await sdk.graphql.execute<RenameReplaySessionResponse>(
+                    const response = await graphql.execute<RenameReplaySessionResponse>(
                         RENAME_REPLAY_SESSION_MUTATION,
                         { id, name },
                     );
@@ -1354,7 +1445,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
             const ids = "items" in parsed ? parsed.items : parsed.ids;
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute<DeleteReplayCollectionResponse>(
+                    const response = await graphql.execute<DeleteReplayCollectionResponse>(
                         DELETE_REPLAY_COLLECTION_MUTATION,
                         { id },
                     );
@@ -1373,7 +1464,7 @@ export const registerReplayTools = ({ server, sdk, store, permissions }: ToolCon
         inputSchema: replayDeleteSessionsSchema,
         handler: async (params) => {
             const { ids } = replayDeleteSessionsSchema.parse(params);
-            const response = await sdk.graphql.execute<DeleteReplaySessionsResponse>(
+            const response = await graphql.execute<DeleteReplaySessionsResponse>(
                 DELETE_REPLAY_SESSIONS_MUTATION,
                 { ids },
             );

@@ -1,6 +1,6 @@
 {
     "name": "frontend",
-    "version": "3.0.1",
+    "version": "4.0.0",
     "description": "MCP frontend",
     "type": "module",
     "scripts": {
@@ -10,12 +10,12 @@
     "author": "vvvvvvvvvvel",
     "license": "MIT",
     "dependencies": {
-        "vue": "^3.5.42"
+        "vue": "^3.5.44"
     },
     "devDependencies": {
         "@caido/sdk-frontend": "^0.58.3",
         "@vue/tsconfig": "^0.9.1",
         "shared": "workspace:*",
-        "vue-tsc": "^3.3.11"
+        "vue-tsc": "^3.3.13"
     }
 }

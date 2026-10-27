@@ -63,11 +63,11 @@ export const tryParseJSON = <T>(text: string): T | null => {
     }
 };
 
-export const assert = (cond: boolean, message: string) => {
+export function assert(cond: unknown, message: string): asserts cond {
     if (!cond) {
         throw new Error(message);
     }
-};
+}
 
 export const logStep = (label: string) => {
     console.log(`\n== ${label}`);

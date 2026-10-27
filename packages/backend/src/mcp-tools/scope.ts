@@ -13,7 +13,7 @@ import { ToolGroupId } from "../tool-permissions";
 import { registerToolAction, type ToolContext } from "./register";
 import { stringifyResult } from "./shared";
 
-export const registerScopeTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerScopeTools = ({ server, sdk, graphql, store, permissions }: ToolContext) => {
     const idSchema = z.preprocess(
         (value) => (typeof value === "number" ? String(value) : value),
         z.string().min(1),
@@ -42,7 +42,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
         description: "List scopes.",
         inputSchema: scopeGetAllSchema,
         handler: async () => {
-            const response = await sdk.graphql.execute(LIST_SCOPES_QUERY);
+            const response = await graphql.execute(LIST_SCOPES_QUERY);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -59,7 +59,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
             const { ids } = scopeIdBatchSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(GET_SCOPE_QUERY, { id });
+                    const response = await graphql.execute(GET_SCOPE_QUERY, { id });
                     return { id, result: response.data ?? response };
                 }),
             );
@@ -81,7 +81,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
             const { items } = scopeCreateSchema.parse(params);
             const results = await Promise.all(
                 items.map(async (item) => {
-                    const response = await sdk.graphql.execute(CREATE_SCOPE_MUTATION, {
+                    const response = await graphql.execute(CREATE_SCOPE_MUTATION, {
                         input: item,
                     });
                     return { input: item, result: response.data ?? response };
@@ -102,7 +102,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
             'Example: { "id": 1, "input": { "name": "In scope", "allowlist": ["example.com"], "denylist": [] } }.',
         inputSchema: scopeUpdateSchema,
         handler: async (params) => {
-            const response = await sdk.graphql.execute(UPDATE_SCOPE_MUTATION, params);
+            const response = await graphql.execute(UPDATE_SCOPE_MUTATION, params);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };
@@ -119,7 +119,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
             const { items } = scopeRenameSchema.parse(params);
             const results = await Promise.all(
                 items.map(async (item) => {
-                    const response = await sdk.graphql.execute(RENAME_SCOPE_MUTATION, item);
+                    const response = await graphql.execute(RENAME_SCOPE_MUTATION, item);
                     return { id: item.id, result: response.data ?? response };
                 }),
             );
@@ -139,7 +139,7 @@ export const registerScopeTools = ({ server, sdk, store, permissions }: ToolCont
             const { ids } = scopeIdBatchSchema.parse(params);
             const results = await Promise.all(
                 ids.map(async (id) => {
-                    const response = await sdk.graphql.execute(DELETE_SCOPE_MUTATION, { id });
+                    const response = await graphql.execute(DELETE_SCOPE_MUTATION, { id });
                     return { id, result: response.data ?? response };
                 }),
             );

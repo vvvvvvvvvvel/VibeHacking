@@ -7,4 +7,6 @@ export * from "./scopes";
 export * from "./sitemap";
 export * from "./websocket";
 export * from "./environments";
-export * from "./passthrough";
+export * from "./automate";
+export * from "./execute";
+export * from "./traffic-control";

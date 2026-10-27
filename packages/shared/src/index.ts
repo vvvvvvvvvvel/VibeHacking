@@ -11,8 +11,13 @@ export type McpConfigInput = {
     port: number;
 };
 
+export type McpServerState = {
+    settings: McpSettings;
+    toolPermissions: ToolPermissions;
+};
+
 export type BackendAPI = {
-    initializeMcpServer: () => Promise<void>;
+    getMcpServerState: () => Promise<McpServerState>;
     getMcpServerSettings: () => Promise<McpSettings>;
     setMcpServerEnabled: (enabled: boolean) => Promise<McpSettings>;
     updateMcpServerConfig: (config: McpConfigInput) => Promise<McpSettings>;
@@ -54,4 +59,4 @@ export const MCP_DEFAULT_HOST = "127.0.0.1";
 export const MCP_DEFAULT_PORT = 3333;
 export const MCP_ENDPOINT_PATH = "/mcp";
 export const MCP_CONTROL_ENDPOINT_PATH = "/control";
-export const MCP_PLUGIN_VERSION = "3.0.1";
+export const MCP_PLUGIN_VERSION = "4.0.0";

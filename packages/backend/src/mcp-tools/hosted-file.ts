@@ -8,7 +8,13 @@ import { ToolGroupId } from "../tool-permissions";
 import { registerToolAction, type ToolContext } from "./register";
 import { stringifyResult, toNumericId } from "./shared";
 
-export const registerHostedFileTools = ({ server, sdk, store, permissions }: ToolContext) => {
+export const registerHostedFileTools = ({
+    server,
+    sdk,
+    graphql,
+    store,
+    permissions,
+}: ToolContext) => {
     const hostedFileGetAllSchema = z.object({}).strict();
     const hostedFileCreateSchema = z
         .object({
@@ -82,10 +88,7 @@ export const registerHostedFileTools = ({ server, sdk, store, permissions }: Too
         description: "Delete a file from the Files section by ID.",
         inputSchema: hostedFileDeleteSchema,
         handler: async (params) => {
-            const response = await sdk.graphql.execute<unknown>(
-                DELETE_HOSTED_FILE_MUTATION,
-                params,
-            );
+            const response = await graphql.execute<unknown>(DELETE_HOSTED_FILE_MUTATION, params);
             return {
                 content: [{ type: "text", text: stringifyResult(response.data ?? response) }],
             };

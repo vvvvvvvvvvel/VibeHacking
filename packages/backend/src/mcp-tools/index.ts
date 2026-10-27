@@ -1,15 +1,16 @@
 import type { McpServer, RegisteredTool } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { ConfirmActionStore } from "../confirm-actions";
+import { createGraphqlExecutor } from "../graphql";
 import type { ToolPermissionsStore } from "../tool-permissions";
 import type { MCPSDK } from "../types/sdk";
 
+import { registerAutomateTools } from "./automate";
 import { registerConsoleTools } from "./console";
 import { registerEnvTools } from "./env";
 import { registerFilterTools } from "./filters";
 import { registerFindingsTools } from "./findings";
 import { registerHostedFileTools } from "./hosted-file";
-import { registerPassthroughTools } from "./passthrough";
 import { registerProjectTools } from "./projects";
 import { attachToolActionRegistry, type ToolContext } from "./register";
 import { registerReplayTools } from "./replay";
@@ -18,6 +19,7 @@ import { registerRuntimeTools } from "./runtime";
 import { registerScopeTools } from "./scope";
 import { registerSitemapTools } from "./sitemap";
 import { registerTamperTools } from "./tamper";
+import { registerTrafficControlTools } from "./traffic-control";
 import { registerWebsocketTools } from "./websocket";
 
 export function registerMcpTools(
@@ -28,13 +30,20 @@ export function registerMcpTools(
 ) {
     const toolsByAction = new Map<string, RegisteredTool>();
     attachToolActionRegistry(server, toolsByAction);
-    const ctx: ToolContext = { server, sdk, store, permissions };
+    const ctx: ToolContext = {
+        server,
+        sdk,
+        graphql: createGraphqlExecutor(sdk),
+        store,
+        permissions,
+    };
 
     registerEnvTools(ctx);
     registerProjectTools(ctx);
     registerScopeTools(ctx);
     registerHostedFileTools(ctx);
-    registerPassthroughTools(ctx);
+    registerTrafficControlTools(ctx);
+    registerAutomateTools(ctx);
     registerFindingsTools(ctx);
     registerRequestTools(ctx);
     registerSitemapTools(ctx);

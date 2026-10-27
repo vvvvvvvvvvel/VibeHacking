@@ -288,6 +288,15 @@ export function createHttpServer({ host, port, handler, listen = true }: ServerO
             }
         });
 
+        socket.on("end", () => {
+            enqueue(() => {
+                if (socket.destroyed !== true) {
+                    socket.end();
+                }
+                return Promise.resolve();
+            });
+        });
+
         socket.on("data", (chunk: Uint8Array) => {
             enqueue(async () => {
                 const merged = new Uint8Array(new ArrayBuffer(buffer.length + chunk.length));

@@ -5,7 +5,7 @@ import { runRuntime } from "./runtime";
 import { runProjects } from "./projects";
 import { runEnv } from "./env";
 import { runHostedFile } from "./hosted-file";
-import { runPassthrough } from "./passthrough";
+import { runAutomate } from "./automate";
 import { runRequests } from "./requests";
 import { runFindings } from "./findings";
 import { runFilters } from "./filters";
@@ -14,6 +14,7 @@ import { runSitemap } from "./sitemap";
 import { runTamper } from "./tamper";
 import { runReplay } from "./replay";
 import { runWebsocket } from "./websocket";
+import { runTrafficControl } from "./traffic-control";
 
 const TOOL_RUNNERS: Record<string, (tools: Set<string>) => Promise<void>> = {
     console: runConsole,
@@ -21,7 +22,8 @@ const TOOL_RUNNERS: Record<string, (tools: Set<string>) => Promise<void>> = {
     projects: runProjects,
     env: runEnv,
     hostedFile: runHostedFile,
-    passthrough: runPassthrough,
+    automate: runAutomate,
+    trafficControl: runTrafficControl,
     requests: runRequests,
     findings: runFindings,
     filters: runFilters,

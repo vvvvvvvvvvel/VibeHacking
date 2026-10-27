@@ -1,10 +1,10 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
+import { readFile, writeFile } from "fs/promises";
 import { join } from "path";
 
 import { MCP_DEFAULT_HOST, MCP_DEFAULT_PORT, type McpSettings } from "shared";
 import { z } from "zod";
 
-import type { MCPSDK } from "./types/sdk";
+import { getKvSdk, type KVSDK, type MCPSDK } from "./types/sdk";
 
 export type SettingsSnapshot = {
     enabled: boolean;
@@ -18,14 +18,19 @@ const settingsSchema = z.object({
     port: z.number().int().min(1).max(65535).optional(),
 });
 
+const SETTINGS_KEY = "mcp-server-settings";
+
 export class McpSettingsStore {
     private readonly sdk: MCPSDK;
+    private readonly kv: KVSDK;
     private readonly settingsPath: string;
+    private keyDefined = false;
     private persistQueue: Promise<void> = Promise.resolve();
     private state: SettingsSnapshot;
 
     constructor(sdk: MCPSDK) {
         this.sdk = sdk;
+        this.kv = getKvSdk(sdk);
         this.settingsPath = join(this.sdk.meta.path(), "settings.json");
         this.state = {
             enabled: false,
@@ -82,51 +87,82 @@ export class McpSettingsStore {
     }
 
     async load(): Promise<SettingsSnapshot | undefined> {
+        await this.defineKey();
+        try {
+            const stored = await this.kv.get(SETTINGS_KEY);
+            if (stored !== null && stored !== undefined) {
+                const snapshot = this.parseSnapshot(stored);
+                await this.clearLegacyFile();
+                return snapshot;
+            }
+        } catch (err) {
+            this.sdk.console.error(`Failed to read MCP settings from KV: ${this.message(err)}`);
+            throw err;
+        }
+
         try {
             const raw = await readFile(this.settingsPath, { encoding: "utf8" });
-            const data = JSON.parse(String(raw)) as unknown;
-            const parsed = settingsSchema.safeParse(data);
-            if (!parsed.success) {
-                return undefined;
-            }
-            const hasLegacyControlToken =
-                data !== null &&
-                typeof data === "object" &&
-                !Array.isArray(data) &&
-                "controlToken" in data;
-            const { enabled, host, port } = parsed.data;
-            const snapshot = {
-                enabled: enabled ?? this.state.enabled,
-                host: host ?? this.state.host,
-                port: port ?? this.state.port,
-            };
-            if (hasLegacyControlToken) {
-                this.state = snapshot;
-                await this.save();
-            }
+            const snapshot = this.parseSnapshot(JSON.parse(String(raw)) as unknown);
+            this.state = snapshot;
+            await this.save();
+            await this.clearLegacyFile();
             return snapshot;
         } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            if (message.includes("no such file") || message.includes("ENOENT")) {
-                await this.save();
-                return undefined;
+            const message = this.message(err);
+            if (!this.isMissingFileError(message)) {
+                this.sdk.console.error(`Failed to migrate legacy MCP settings: ${message}`);
             }
-            this.sdk.console.error(`Failed to read MCP settings: ${message}`);
+            await this.save();
+            await this.clearLegacyFile();
             return undefined;
         }
     }
 
     save(): Promise<void> {
-        this.persistQueue = this.persistQueue
-            .then(() => this.saveInternal())
-            .catch(() => undefined);
-        return this.persistQueue;
+        const operation = this.persistQueue.then(() => this.saveInternal());
+        this.persistQueue = operation.catch(() => undefined);
+        return operation;
     }
 
     private async saveInternal(): Promise<void> {
-        const data = JSON.stringify(this.state, null, 2);
-        await mkdir(this.sdk.meta.path(), { recursive: true });
-        await writeFile(this.settingsPath, data);
+        await this.defineKey();
+        await this.kv.set(SETTINGS_KEY, { ...this.state });
+    }
+
+    private async defineKey() {
+        if (this.keyDefined) return;
+        await this.kv.define(SETTINGS_KEY, { exportable: true });
+        this.keyDefined = true;
+    }
+
+    private parseSnapshot(value: unknown): SettingsSnapshot {
+        const parsed = settingsSchema.parse(value);
+        return {
+            enabled: parsed.enabled ?? this.state.enabled,
+            host: parsed.host ?? this.state.host,
+            port: parsed.port ?? this.state.port,
+        };
+    }
+
+    private async clearLegacyFile() {
+        try {
+            await readFile(this.settingsPath);
+            await writeFile(this.settingsPath, "{}\n");
+        } catch (err) {
+            const message = this.message(err);
+            if (!this.isMissingFileError(message)) {
+                this.sdk.console.error(`Failed to clear legacy MCP settings: ${message}`);
+            }
+        }
+    }
+
+    private message(error: unknown) {
+        return error instanceof Error ? error.message : String(error);
+    }
+
+    private isMissingFileError(message: string) {
+        const normalized = message.toLowerCase();
+        return normalized.includes("no such file") || normalized.includes("enoent");
     }
 
     private validateConfig(input: { host: string; port: number }) {

@@ -227,9 +227,10 @@ export const runWebsocket = async (tools: Set<string>) => {
                 serialization: { include_edited_payload: true },
             });
             const withEditedData = tryParseJSON<{ items?: Array<any> }>(getToolText(withEdited));
-            if (withEditedData?.items?.[0]?.edit_ids?.length > 0) {
+            const withEditedItem = withEditedData?.items?.[0];
+            if (withEditedItem?.edit_ids?.length > 0) {
                 assert(
-                    withEditedData.items[0].edited_payload?.encoding === "text",
+                    withEditedItem.edited_payload?.encoding === "text",
                     "include_edited_payload did not materialize edited_payload",
                 );
             }

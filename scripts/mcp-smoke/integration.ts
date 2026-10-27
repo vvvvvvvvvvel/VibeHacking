@@ -48,11 +48,9 @@ const main = async () => {
     assert(tools.has("send_raw_requests"), "send_raw_requests missing — load the updated build");
 
     const raw = `GET ${PATH} HTTP/1.1\r\nHost: ${HOST}\r\nUser-Agent: caido-mcp-integration\r\nConnection: close\r\n\r\n`;
-    const rawBase64 = Buffer.from(raw).toString("base64");
-
     console.log(`\n== send_raw_requests -> ${TLS ? "https" : "http"}://${HOST}:${PORT}${PATH}`);
     const sent = await call("send_raw_requests", {
-        items: [{ raw_base64: rawBase64, host: HOST, port: PORT, is_tls: TLS }],
+        items: [{ raw_text: raw, host: HOST, port: PORT, is_tls: TLS }],
         options: { save: true, timeouts: { global: 15000 } },
         serialization: { include_body: false },
     });
