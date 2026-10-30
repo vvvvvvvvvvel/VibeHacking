@@ -41,14 +41,14 @@ Useful HTTPQL clauses:
 
 ```text
 req.host.eq:"api.example.com"
-req.host.cont:"example.com"
+(req.host.eq:"example.com" OR req.host.like:"%.example.com")
 req.method.eq:"POST" AND req.path.cont:"/graphql"
 resp.code.eq:401 OR resp.code.eq:403
 resp.code.gte:500
 req.raw.cont:"authorization" OR resp.raw.cont:"access_token"
 ```
 
-Prefer `eq` for an exact host and `cont` for a domain plus its subdomains. Read [references/httpql.md](references/httpql.md) only when advanced operators or escaping rules are needed.
+Prefer `eq` for one exact host. For a root domain plus its subdomains, combine `eq` with `like:"%.example.com"`; use `cont` only for broad discovery because it also matches unrelated host suffixes. Read [references/httpql.md](references/httpql.md) only when advanced operators or escaping rules are needed.
 
 ### Extract only matching evidence
 
@@ -189,6 +189,5 @@ Use exact-ID WebSocket getters only after stream/message discovery.
 ## Operational Checks
 
 - Use `check_requests_scope` only when scope membership itself matters; HTTPQL host filtering is usually more useful for discovery.
-- Read `get_proxy_traffic_control` before changing capture behavior. Use `set_proxy_traffic_control` only when the user intends to alter capture or passthrough settings.
 - Keep broad discovery body-light. Retrieve raw requests, responses, and WS payloads only for selected candidates.
 - Record request IDs, filters, active sends, and any remaining uncertainty in the result.

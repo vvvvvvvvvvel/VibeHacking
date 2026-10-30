@@ -13,10 +13,10 @@ Drive Caido through MCP: discover traffic read-only, narrow with Caido-native fi
 ## Operating Workflow
 
 1. Start read-only: HTTP history (`list_requests`) or Sitemap discovery with a small `fields` list.
-2. Narrow with Caido-native filters: HTTPQL for history, the `filter` object for Sitemap.
+2. Narrow with Caido-native filters: HTTPQL for history, the `filter` object for Sitemap, and StreamQL for WebSocket streams.
 3. Pull exact evidence by ID only after discovery (`get_requests_by_ids`, `list_sitemap_entry_requests`).
 4. Use `regex_excerpt` when only a token, ID, nonce, header, or error fragment is needed.
-5. Send traffic only when the user expects active validation. Prefer `options.save=true` for later evidence.
+5. Send traffic only when the user expects active validation. Set `options.save=true` only when the send must remain in Caido for later evidence or follow-up.
 6. Report IDs, filters, active sends, and remaining uncertainty.
 
 Keep broad discovery body-light. Do not request raw bodies unless they are necessary evidence.
@@ -30,7 +30,7 @@ Discovery tools return **all** captured traffic by default — they are **not** 
 - `list_requests` never applies a scope filter; it only annotates `in_scope` per row (hidden from the default shape — request it with `fields: ["in_scope"]`).
 - `list_sitemap_roots` / `list_sitemap_descendants` / `list_websocket_streams` accept an optional `scope_id`; omit it to see everything.
 
-Caido scopes are often broad (for example `.+`, matching every host), so scope is usually useless for narrowing. **Filter by host with HTTPQL instead** (see below). Use `list_scopes` / `check_requests_scope` only when the user explicitly cares about scope membership.
+Do not assume a Caido scope narrows traffic: a scope can be as broad as `.+`, matching every host. Use explicit HTTPQL host/path filters for discovery, and use `list_scopes` / `check_requests_scope` when scope membership itself matters.
 
 ## HTTP History
 
@@ -64,22 +64,22 @@ Exact host match:
 }
 ```
 
-Domain + all subdomains (simplest, case-insensitive substring) — usually what you want:
+Exact domain plus all subdomains:
 
 ```json
 {
     "limit": 50,
-    "filter": "req.host.cont:\"example.com\"",
+    "filter": "(req.host.eq:\"example.com\" OR req.host.like:\"%.example.com\")",
     "fields": ["cursor", "id", "request.method", "request.url", "response.status_code"]
 }
 ```
 
-Host by regex — anchor at the end and leave `.` as a wildcard. Do **not** backslash-escape dots: Caido's HTTPQL string parser consumes a single `\`, so `\.` silently matches nothing. `.` matches the literal dot well enough for hostnames.
+Use host regex only for a genuine pattern. Literal dots must survive both JSON and HTTPQL escaping, so write them as `\\\\.` in the JSON tool arguments:
 
 ```json
 {
     "limit": 50,
-    "filter": "req.host.regex:\"example.com$\"",
+    "filter": "req.host.regex:\"^api[0-9]+\\\\.example\\\\.com$\"",
     "fields": ["cursor", "id", "request.method", "request.url", "response.status_code"]
 }
 ```
@@ -99,7 +99,7 @@ Then pull full request and response bytes for the IDs you found:
 }
 ```
 
-Prefer `req.host.eq` for an exact host and `req.host.cont` for a domain plus its subdomains; reach for `req.host.regex` only for genuine patterns. See `references/httpql.md` for the escaping details.
+Prefer `req.host.eq` for one exact host. For a root domain plus its subdomains, combine `eq` with `like:"%.example.com"`; use `cont` only for broad discovery because it also matches unrelated host suffixes. Reach for `req.host.regex` only for genuine patterns. See `references/httpql.md` for the escaping details.
 
 ### HTTPQL quick examples
 
@@ -121,7 +121,7 @@ Use `send_requests` only for active validation. It sends saved requests by ID:
 ```json
 {
     "ids": [123],
-    "options": { "save": true, "timeouts": { "global": 15000 } },
+    "options": { "timeouts": { "global": 15000 } },
     "serialization": {
         "include_body": true,
         "include_binary": false,
@@ -142,12 +142,11 @@ To send a hand-crafted or modified request that is not saved, use `send_raw_requ
             "port": 443,
             "is_tls": true
         }
-    ],
-    "options": { "save": true }
+    ]
 }
 ```
 
-Both return the live response. A send appears in Caido history only when `options.save=true`.
+Both return the live response without requiring another history entry. Set `options.save=true` only when the send must remain in Caido for later evidence, comparison, or follow-up.
 
 For IDOR/auth checks, first gather two exact request IDs, compare with `get_requests_by_ids`, then send only the minimum request needed.
 
@@ -208,7 +207,7 @@ For real request pagination under one entry, use `list_sitemap_entry_requests` (
 
 ## WebSocket
 
-List streams first, then messages by stream:
+List streams first with StreamQL, then messages by stream:
 
 ```json
 {
@@ -251,7 +250,7 @@ Use `list_automate_sessions` to discover sessions, then `get_automate_session` t
 
 ## Replay and Other Tools
 
-- Replay: find source requests in history, then use `send_to_replay` or `send_to_replay_from_filter` to build sessions. `create_replay_session` can also prepare a session directly from `raw_requests` without sending traffic. Use `create_replay_pipeline_session` when preparing Caido's HTTP pipeline Replay flow for ordered/last-byte/single-packet validation. Use `start_replay_task` (by `session_ids`) only when active Replay execution of those sessions is intended; it sends each session's current request.
+- Replay: use `create_replay_session` to prepare sessions from saved request IDs, raw requests, or both without sending traffic. Use `send_to_replay` or `send_to_replay_from_filter` when targeting an existing collection; they require `collection_id` or `collection_name`. Use `create_replay_pipeline_session` for ordered, last-byte synchronization, or single-packet validation. Use `start_replay_task` (by `session_ids`) only when active execution is intended; it sends each session's current request.
 - Proxy traffic control: use `get_proxy_traffic_control` to inspect the current mode and custom lists. Use `set_proxy_traffic_control` to select `all`, `in_scope`, or `custom`; custom mode accepts `capture_list` and `passthrough_list`.
 - Scopes: see the Scope section. Use `list_scopes` / `get_scope` / `check_requests_scope` only when scope membership matters.
 - Filters: use `list_filter_presets` and `get_filter_preset` to reuse saved HTTPQL.

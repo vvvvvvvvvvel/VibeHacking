@@ -1,9 +1,10 @@
 # Serialization, Projection, and Regex Excerpts
 
-These controls shape the **size and form** of output. They are supported by `list_requests`,
-`get_requests_by_ids`, `list_sitemap_entry_requests`, `list_findings` (HTTP pairs), and the
-WebSocket message tools. Projection and serialization change output shape only — they do not
-change which rows are selected (use HTTPQL / tool filters for that).
+These controls shape the **size and form** of output. HTTP projection, body serialization, and
+`regex_excerpt` are supported by `list_requests`, `get_requests_by_ids`,
+`list_sitemap_entry_requests`, and `list_findings` (HTTP pairs). WebSocket message tools support
+their own field projection and payload serialization, but not `regex_excerpt`. These controls do
+not change which rows are selected; use HTTPQL, StreamQL, or the tool's filter for that.
 
 ## Field projection: `fields` / `exclude_fields`
 
@@ -18,7 +19,8 @@ change which rows are selected (use HTTPQL / tool filters for that).
 
 Common request paths: `id`, `time`, `cursor`, `in_scope`, `request.method`, `request.url`,
 `request.headers`, `request.body.text`, `request.raw.text`, `response.status_code`,
-`response.headers`, `response.body.text`, `response.raw.text`, `match_context.excerpts`.
+`response.headers`, `response.body.text`, `response.raw.text`, `match_context.excerpts`,
+`match_context.truncated`.
 
 ## Serialization options
 
@@ -49,6 +51,9 @@ Use `serialization.regex_excerpt` plus `fields: ["match_context.excerpts"]` to r
 matching fragments instead of full bodies. If body/raw fields are also requested alongside an
 excerpt, they are ignored and excerpts are returned instead. Excerpts are extracted from rows
 already selected by the tool — narrow the row set with HTTPQL first.
+
+Each item returns at most 1000 excerpts. When more matches exist,
+`match_context.truncated=true`; narrow the HTTPQL filter or regex before continuing.
 
 Find likely API tokens without returning full responses:
 
