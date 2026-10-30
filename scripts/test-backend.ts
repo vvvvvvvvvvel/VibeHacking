@@ -171,15 +171,71 @@ const testPermissionProfiles = async () => {
     const permissions = new ToolPermissionsStore(makeSdk(directory));
     await permissions.load();
 
-    assert.equal(permissions.getPermissions().profile, "core");
+    const core = permissions.getPermissions();
+    assert.equal(core.profile, "core");
+    assert.deepEqual(core.states, {
+        "group-log": "disabled",
+        "env-safe": "disabled",
+        "env-unsafe": "disabled",
+        "filter-safe": "disabled",
+        "filter-unsafe": "disabled",
+        "finding-safe": "disabled",
+        "finding-unsafe": "disabled",
+        "hosted-file-safe": "disabled",
+        "hosted-file-unsafe": "disabled",
+        "proxy-traffic-control-safe": "disabled",
+        "proxy-traffic-control-unsafe": "disabled",
+        "automate-safe": "disabled",
+        "project-safe": "disabled",
+        "replay-read": "auto",
+        "replay-prepare": "auto",
+        "replay-execute": "confirm",
+        "replay-manage": "disabled",
+        "request-safe": "auto",
+        "request-unsafe": "confirm",
+        "runtime-safe": "disabled",
+        "sitemap-safe": "auto",
+        "scope-safe": "auto",
+        "scope-unsafe": "disabled",
+        "tamper-safe": "disabled",
+        "tamper-unsafe": "disabled",
+        "ws-safe": "auto",
+    });
+
     const full = await permissions.applyProfile("full");
     assert.equal(full.profile, "full");
-    assert.equal(full.states["env-safe"], "auto");
-    assert.equal(full.states["env-unsafe"], "confirm");
-    assert.equal(full.states["replay-manage"], "confirm");
+    for (const group of full.groups) {
+        const expected =
+            group.id === "group-log"
+                ? "disabled"
+                : group.id.endsWith("-unsafe") ||
+                    group.id === "replay-execute" ||
+                    group.id === "replay-manage"
+                  ? "confirm"
+                  : "auto";
+        assert.equal(full.states[group.id], expected, `unexpected Full mode for ${group.id}`);
+    }
 
     const custom = await permissions.setGroupMode("env-safe", "disabled");
     assert.equal(custom.profile, "custom");
+};
+
+const testConfirmationTimeoutSettings = async () => {
+    const directory = await mkdtemp(join(tmpdir(), "caido-mcp-confirmation-settings-"));
+    const kv = new MemoryKv();
+    const settings = new McpSettingsStore(makeSdk(directory, kv));
+    await settings.load();
+
+    settings.setToolConfirmationTimeout(600);
+    await settings.save();
+    assert.equal(settings.getSnapshot().confirmationTimeoutSeconds, 600);
+    assert.equal(
+        (kv.values.get("mcp-server-settings") as { confirmationTimeoutSeconds?: number })
+            .confirmationTimeoutSeconds,
+        600,
+    );
+    assert.throws(() => settings.setToolConfirmationTimeout(4), /between 5 and 3600/);
+    assert.throws(() => settings.setToolConfirmationTimeout(3601), /between 5 and 3600/);
 };
 
 const testConfirmationTimeout = async () => {
@@ -321,6 +377,7 @@ const main = async () => {
     await testPermissionMutationsAreSerialized();
     await testPermissionSnapshotsAreIsolated();
     await testPermissionProfiles();
+    await testConfirmationTimeoutSettings();
     await testConfirmationTimeout();
     await testConfirmationResolutionClearsTimeout();
     await testGraphqlErrorsPropagate();
