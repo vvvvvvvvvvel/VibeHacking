@@ -758,6 +758,12 @@ const clientGuideExamples = computed<ClientGuideExample[]>(() => [
         command: `claude mcp add --transport http caido ${mcpUrl.value}`,
         copyLabel: "Claude command",
     },
+    {
+        title: "Antigravity CLI (agy)",
+        description: "Flags must appear before the server name.",
+        command: `agy mcp add --type http caido ${mcpUrl.value}`,
+        copyLabel: "Antigravity command",
+    },
 ]);
 
 const apiGuideExamples = computed(() => [
