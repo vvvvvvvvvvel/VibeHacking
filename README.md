@@ -33,6 +33,21 @@ The repository also includes agent workflow guides under [`skills/`](./skills/).
 guide is [`skills/caido-mcp/SKILL.md`](./skills/caido-mcp/SKILL.md); each skill keeps its own
 references inside its bundle.
 
+### Antigravity CLI (agy)
+
+With the MCP server enabled, open the plugin's client setup guide and copy the
+**Antigravity CLI (agy)** command. It uses the configured MCP URL. For the default
+local endpoint:
+
+```bash
+agy mcp add --type http caido http://127.0.0.1:3333/mcp
+agy mcp list
+```
+
+Replace the example URL if your server uses a different address or port. The
+`--type http` flag must come before the server name (`caido`). Run the command in
+the environment where you use agy; `127.0.0.1` refers to that machine.
+
 ## API Control
 
 The plugin exposes a localhost-only control endpoint at `http://127.0.0.1:<port>/control`.
